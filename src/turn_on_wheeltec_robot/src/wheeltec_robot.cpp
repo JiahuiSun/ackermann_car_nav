@@ -122,6 +122,8 @@ void turn_on_robot::Publish_Odom()
 {
     //Convert the Z-axis rotation Angle into a quaternion for expression 
     //把Z轴转角转换为四元数进行表达
+    // 如果Robot_Vel.z表示绕z轴角速度，那么Robot_Pos.z就是绕z轴的弧度了？正是在下
+    // Odom是通过yaw来计算四元数；IMU是通过线加速度和角速度计算四元数；这两个哪个更准？莫非，这就是多传感器融合的意义？
     geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(Robot_Pos.Z);
 
     nav_msgs::Odometry odom; //Instance the odometer topic data //实例化里程计话题数据
@@ -373,6 +375,8 @@ bool turn_on_robot::Get_Sensor_Data_New()
           
         //MPU6050 stands for IMU only and does not refer to a specific model. It can be either MPU6050 or MPU9250
         //Mpu6050仅代表IMU，不指代特定型号，既可以是MPU6050也可以是MPU9250
+        // 机器人速度有x轴、y轴的线速度，和绕z轴的角速度；那IMU的x、y、z轴的角速度是什么意思？两个z轴速度相等吗？只能绕z轴运动吧，IMU的xy会=0吗？
+        // 看一下呗，两者的z轴角速度是否相等，xy的角速度是否为0；xy角速度确实为0，但z轴角速度不完全相等，IMU波动较大
         Mpu6050_Data.accele_x_data = IMU_Trans(Receive_Data.rx[8],Receive_Data.rx[9]);   //Get the X-axis acceleration of the IMU     //获取IMU的X轴加速度  
         Mpu6050_Data.accele_y_data = IMU_Trans(Receive_Data.rx[10],Receive_Data.rx[11]); //Get the Y-axis acceleration of the IMU     //获取IMU的Y轴加速度
         Mpu6050_Data.accele_z_data = IMU_Trans(Receive_Data.rx[12],Receive_Data.rx[13]); //Get the Z-axis acceleration of the IMU     //获取IMU的Z轴加速度
@@ -415,6 +419,8 @@ Function: Loop access to the lower computer data and issue topics
 ***************************************/
 void turn_on_robot::Control()
 {
+  // 我这加了一句，否则last_time没有初始化，虽然因为开始时速度为0导致位移没有影响
+  _Last_Time = ros::Time::now();
   while(ros::ok())
   {
     if (true == Get_Sensor_Data_New()) //The serial port reads and verifies the data sent by the lower computer, and then the data is converted to international units
@@ -423,7 +429,7 @@ void turn_on_robot::Control()
       _Now = ros::Time::now();
       Sampling_Time = (_Now - _Last_Time).toSec(); //Retrieves time interval, which is used to integrate velocity to obtain displacement (mileage) 
                                                    //获取时间间隔，用于积分速度获得位移(里程)
-      
+
       //Odometer correction parameters
       //里程计误差修正
       Robot_Vel.X=Robot_Vel.X*odom_x_scale;
@@ -435,6 +441,8 @@ void turn_on_robot::Control()
 
       //Speed * Time = displacement (odometer)
       //速度*时间=位移（里程计）
+      // 不明白为什么要cos(z)，并且在平面上小车的z=0吧，这样就解释通了？
+      // Robot_Pos和Robot_Vel虽然都用XYZ，但根本不是一个坐标系，Robot_Pos是odom坐标系，Vel是base_link坐标系，画出来就发现没错
       Robot_Pos.X+=(Robot_Vel.X * cos(Robot_Pos.Z) - Robot_Vel.Y * sin(Robot_Pos.Z)) * Sampling_Time; //Calculate the displacement in the X direction, unit: m //计算X方向的位移，单位：m
       Robot_Pos.Y+=(Robot_Vel.X * sin(Robot_Pos.Z) + Robot_Vel.Y * cos(Robot_Pos.Z)) * Sampling_Time; //Calculate the displacement in the Y direction, unit: m //计算Y方向的位移，单位：m
       Robot_Pos.Z+=Robot_Vel.Z * Sampling_Time; //The angular displacement about the Z axis, in rad //绕Z轴的角位移，单位：rad 
