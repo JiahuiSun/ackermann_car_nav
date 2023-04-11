@@ -10,7 +10,7 @@
   <include file="$(find turn_on_wheeltec_robot)/launch/wheeltec_lidar.launch" />
 
   <!-- 启动APP一键保存地图功能  -->
-  <node pkg="world_canvas_msgs" type="save" name="save_map" />
+  <!-- <node pkg="world_canvas_msgs" type="save" name="save_map" /> -->
 
   <!-- 开启gmapping建图算法  -->
   <group if="$(eval mapping_mode == 'gmapping')">
