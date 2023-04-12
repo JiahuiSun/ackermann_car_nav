@@ -4,7 +4,7 @@
 
 
 char strFileName1[255];
-char strRecordFilePath[] = "/home/dingrong/Code/DCA1000/DCA1000-source-code/Release/data/adc_";
+char strRecordFilePath[] = "/home/dingrong/Code/ackermann_car_nav/data/test_";
 char REC_DATA_FILE_EXTENSION[] = ".bin";
 int u32DataFileCount = 0;
 
