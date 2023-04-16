@@ -1,3 +1,53 @@
+本质上，为什么DCA能从1443取数据呢？
+1443的代码把数据从ADCbuffer搬运到60pin，再从60pin通过网口传输；
+如果当read的大小达到一个一帧的整数倍时，我就开始传输操作
+
+能否在先有逻辑上增加，而非替换？
+```
+frameIndex = 0
+frameBufPtr = 0
+part_frame = 0
+
+if part_frame > 0:
+    if ReadPtrBufIndex >= frame_len - part_frame
+        取出当前 (0, frame_len-part_frame) 数据，开始发布
+        frameIndex++
+        frameBufPtr = frame_len - part_frame
+        part_frame = 0
+else:
+    if ReadPtrBufIndex >= frameBufPtr + frame_len
+        就说明收集满1帧了，开始发布数据
+        取出 (frameBufPtr, frame_len) 数据，开始发布
+        frameBufPtr += frame_len
+        frameIndex++
+
+if ReadPtrBufIndex+u32Size > buffer size:
+    part_frame = ReadPtrBufIndex - frameBufPtr
+    if part_frame > 0:
+        取出 (frameBufPtr, part_frame) 的数据，暂时不发布
+    else:
+        frameBufPtr = 0
+``` 
+
+- 先验证一下，包顺序不对的情况是否会出现，如果不会出现，那我就可以放心的修改writeDataToBuffer_Inline
+    - 没有包顺序不对的情况
+- 我就不要写文件这个线程了，而是直接在接收数据的线程中，把数据保存下来
+    - 关闭写文件线程；done
+    - 停止线程中，不再写文件；done
+    - 接收数据线程中，不再等待写文件的信号，因为已经不再写文件了；done
+    - setFileName停掉；done
+    - 在接收数据线程中，增加保存文件函数；done
+    - ReorderAlgorithm是干什么用的？必须要有吗？有就有吧；done
+- 预期效果：
+    - 每一帧保存一个文件；成功了
+- 当填满buffer后，重开呢？也就是sensor stop, sensor start，这样的好处是：
+    - 避免错误累积
+    - 简化取数据的逻辑，因为不用考虑断层。
+    - 如果不重开，我现在就实现完了——那就把目前的实现完了吧
+    - 怎么实现？
+        - 当sensor stop时，不删除内存，而是全部初始化
+
+
 ### 代码走读
 ```
 main():
@@ -47,7 +97,7 @@ main():
         启动数据保存进程，thread tRawData2([&] { objUdpDataRecv.Thread_WriteDataToFile();})
             writeDataToFile_Inline(s8RecBuf2, u32WritePtrSize)
                 等待buffer1或buffer2填满的信号
-                受到信号后，把满的buffer写到文件里
+                收到信号后，把满的buffer写到文件里
 ```
 
 ### 自己的修改
@@ -77,13 +127,20 @@ main():
     - 如果我把pub变成write，理论上，我现在的代码和源代码逻辑一样，只是buffer和packet size改变了；如果这样做是没错的，那我pub了，理论上也是没错把三
     - 用原始代码收一波，看看结果是不是对的；
         - 虽然不敢说一定对，但至少数据不会报错，明天再好好做一组实验
+        - 有数据但是不对——这个说明matlab的代码存在问题TODO:
     - 再用修改后的、保存每帧的代码收一波，看看结果是不是一样的；
         - 发了10帧，怎么只有8帧结果保存了？
             - 怀疑是还没保存完，就发出了停止信号，DCA就停止了？
-周四：meeting
-周五：上午讨论论文，下午小车导航？
-周六：做实验
-周二：做实验
+            - 也就是说，我只是把buffer、packet、file size一改，就会收不到10帧了？并且收到的数据还会报错
+        - 这个无论是保存文件，还是pub，结果没区别，都会报错
+        - 我现在甚至能够做到启动-停止-启动的收数据版本，但是数据量不对
+        - 是丢包吗？把时延增大试试
+    - 单纯把packet增大，结果是不影响的
+
+### 19:34
+- 真的是收的数据错了吗？会不会是matlab解析错了？
+- 如果不修改buffer size和file size，就不会出现
+- 
 
 ### 13:09
 我现在要干什么？
