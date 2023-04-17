@@ -51,6 +51,15 @@ if ReadPtrBufIndex+u32Size > buffer size:
 - 目前发布数据的流程已经走通，再检查最后一遍整体逻辑。
     - 发现错误，要reorder再保存，而reorder必须用数组，所以还是得先赋值给数组，再赋值给vector
 - 现在代码没问题了，但是数据处理有问题，即便是原始的数据，也有问题，是参数不对的原因吗？
+    - 参数不对，导致range grid大小不对？
+    - 先正经的做一组实验，再分析数据吧，万一真的就是9米呢？就是实际做一组实验，用原始的CLI tool、SourceMy和mmWave radar
+        - mmWave radar准备；done
+        - CLI tool准备；done
+        - SourceMy准备；done
+        - 毫米波雷达准备；done
+        - 模拟演练
+        - 如果后两个和原始CLI得到的数据结果一样，那就表明代码没错；如果原始CLI结果也是不对，比如9米，那就得分析哪里出了问题
+
 
 ### 代码走读
 ```

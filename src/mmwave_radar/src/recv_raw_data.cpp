@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
     ros::init(argc, argv, "recv_raw_data");
     ros::NodeHandle nh;
     // 创建话题订阅对象
-    ros::Subscriber sub = nh.subscribe<mmwave_radar::adcData>("mmwave_adc_data", 10, saveData);
+    ros::Subscriber sub = nh.subscribe<mmwave_radar::adcData>("mmwave_radar_data", 10, saveData);
     // 创建回调函数，监听收到的话题，把数据保存到文件里
     ros::spin();
     return 0;
