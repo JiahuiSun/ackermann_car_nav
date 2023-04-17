@@ -1522,7 +1522,8 @@ void
 STATUS StartRecordData
 (
 strStartRecConfigMode sStartRecConfigMode,
-ros::NodeHandle nh
+ros::NodeHandle nh,
+UINT32 frameLen
 )
 {
 #ifdef ENABLE_DEBUG
@@ -1553,8 +1554,9 @@ ros::NodeHandle nh
     sprintf(s8DebugMsg, "\nu32FramesToCapture : %d", sStartRecConfigMode.u32FramesToCapture);
     DEBUG_FILE_WRITE(s8DebugMsg);
 #endif
-    objUdpDataRecv.pub = nh.advertise<mmwave_radar::adcData>("mmwave_adc_data", 10);
+    objUdpDataRecv.pub = nh.advertise<mmwave_radar::adcData>("mmwave_radar_data", 10);
     objUdpDataRecv.time_ = ros::Time::now();
+    objUdpDataRecv.u32FrameLen = frameLen;
 
     /** Resetting record global status    */
     gbRecStopCmdSent = false;
@@ -1626,10 +1628,8 @@ ros::NodeHandle nh
     memcpy(&sRFDCCard_StartRecConfig, &sStartRecConfigMode,
            sizeof(strStartRecConfigMode));
 
-    // u32MaxFileSizeToCapture = sRFDCCard_StartRecConfig.u16MaxRecFileSize *
-                                // 1024 * 1024;
-    // 设为1帧大小       
-    u32MaxFileSizeToCapture = INLINE_BUF_SIZE;
+    u32MaxFileSizeToCapture = sRFDCCard_StartRecConfig.u16MaxRecFileSize *
+                                1024 * 1024;
 
     if(sRFDCCard_StartRecConfig.eLvdsMode == TWO_LANE)
         u8LaneNumber = 2;
@@ -1664,8 +1664,8 @@ ros::NodeHandle nh
     objUdpDataRecv.setThreadStart();
 #ifndef POST_PROCESSING
     /** Start thread for writing data into file from buffer for ADC port (inline processing) */
-    std::thread tRawData2([&] { objUdpDataRecv.Thread_WriteDataToFile(); });
-    tRawData2.detach();
+    // std::thread tRawData2([&] { objUdpDataRecv.Thread_WriteDataToFile(); });
+    // tRawData2.detach();
 #endif
 
     if(sStartRecConfigMode.eConfigLogMode == MULTI_MODE)

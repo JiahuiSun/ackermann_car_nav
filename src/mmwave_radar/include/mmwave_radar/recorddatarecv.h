@@ -65,7 +65,7 @@
 ///****************
 
 #include "mmwave_radar/rf_api_internal.h"
-
+#include "mmwave_radar/adcData.h"
 #include "mmwave_radar/defines.h"
 #include "mmwave_radar/extern.h"
 #include "ros/ros.h"
@@ -194,7 +194,13 @@ public:
     ros::Publisher pub;
     ros::Time pre_time_;
     ros::Time time_;
-    UINT32 seq = 0;
+    mmwave_radar::adcData msg;
+    /* select frame data */
+    UINT32 u32FrameIndex;
+    UINT32 u32FrameBufPtr;
+    UINT32 u32PartFrame;
+    UINT32 u32FrameLen;
+    SINT8 s8FrameBuf[5000000];
 
     /** @fn cUdpDataReceiver(UINT8 u8DataTypeArg)
      * @brief This constructor function is to initialize the class member <!--
@@ -203,6 +209,9 @@ public:
      */
     cUdpDataReceiver(UINT8 u8DataTypeArg);
 	
+    void saveFrame();
+    void pubFrame();
+
     /** @fn void setSocketOpen()
      * @brief This function is to reset member variables and set data socket <!--
      * --> as open for each record process
@@ -275,7 +284,6 @@ public:
      * @return boolean value
      */
     bool writeDataToFile_Inline(SINT8 *s8Buffer, UINT32 u32Size);
-    bool pubDataToServer_Inline(SINT8 *s8Buffer, UINT32 u32Size);
 
     /** @fn  bool ReorderAlgorithm(SINT8 *s8Buffer, UINT32 u32SizeReorder)
      * @brief This function is to reorder the recorded data based on number <!--

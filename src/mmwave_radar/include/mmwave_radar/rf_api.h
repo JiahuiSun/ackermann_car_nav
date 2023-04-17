@@ -735,7 +735,8 @@ EXPORT STATUS DisconnectRFDCCard_AsyncCommandMode (void);
 EXPORT STATUS StartRecordData
 (
     strStartRecConfigMode sStartRecConfigMode,
-    ros::NodeHandle nh
+    ros::NodeHandle nh,
+    UINT32 frameLen
 );
 
 /** @fn EXPORT STATUS StopRecordData(void)

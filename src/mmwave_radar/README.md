@@ -46,7 +46,10 @@ if ReadPtrBufIndex+u32Size > buffer size:
     - 如果不重开，我现在就实现完了——那就把目前的实现完了吧
     - 怎么实现？
         - 当sensor stop时，不删除内存，而是全部初始化
-
+- 把frameLen、nh作为参数传进去；done
+- 组织数据格式，发布数据；done
+- 目前发布数据的流程已经走通，再检查最后一遍整体逻辑。
+    - 发现错误，要reorder再保存，而reorder必须用数组，所以还是得先赋值给数组，再赋值给vector
 
 ### 代码走读
 ```

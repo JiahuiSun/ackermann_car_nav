@@ -181,27 +181,25 @@ void cUdpDataReceiver::setThreadStop()
      bThreadState   = false;
 
 #ifndef POST_PROCESSING
-     if(u32ReadPtrSize > 0)
-     {
-         if(bWaitForSignal)
-         {
-             /** wait for signal */
-             osalObj.WaitForSignal(&sgnFileWriteCompletionWaitEvent, NON_STOP);
-         }
+    //  if(u32ReadPtrSize > 0)
+    //  {
+    //      if(bWaitForSignal)
+    //      {
+    //          /** wait for signal */
+    //          osalObj.WaitForSignal(&sgnFileWriteCompletionWaitEvent, NON_STOP);
+    //      }
 
-         bBuf1Empty = !bBuf1Empty;
+    //      bBuf1Empty = !bBuf1Empty;
 
-         if(bBuf1Empty)
-         {
-            //  writeDataToFile_Inline(s8RecBuf2, u32ReadPtrSize);
-             pubDataToServer_Inline(s8RecBuf2, u32ReadPtrSize);
-         }
-         else
-         {
-            //  writeDataToFile_Inline(s8RecBuf1, u32ReadPtrSize);
-             pubDataToServer_Inline(s8RecBuf1, u32ReadPtrSize);
-         }
-    }
+    //      if(bBuf1Empty)
+    //      {
+    //          writeDataToFile_Inline(s8RecBuf2, u32ReadPtrSize);
+    //      }
+    //      else
+    //      {
+    //          writeDataToFile_Inline(s8RecBuf1, u32ReadPtrSize);
+    //      }
+    // }
 
     osalObj.DeInitEvent(&sgnFileWriteCompletionWaitEvent);
     osalObj.DeInitEvent(&sgnFileWriteInitWaitEvent);
@@ -595,6 +593,20 @@ void cUdpDataReceiver::readData()
                 u32ReadPtrSize = 0;
                 u32WritePtrSize = 0;
                 u32ReadPtrBufIndex = 0;
+
+                // Initialization
+                u32FrameIndex = 0;
+                u32FrameBufPtr = 0;
+                u32PartFrame = 0;
+                msg.header.frame_id = "mmwave_radar";
+                msg.size = u32FrameLen;
+                msg.data.resize(u32FrameLen);
+
+                memcpy(strRecordFilePath, sRFDCCard_StartRecConfig.s8FileBasePath,
+                    strlen(sRFDCCard_StartRecConfig.s8FileBasePath));
+                strcat(strRecordFilePath, "/");
+                strcat(strRecordFilePath, sRFDCCard_StartRecConfig.s8FilePrefix);
+                strRecordFilePath[strlen(strRecordFilePath)] = '\0';
             }
 
             /** Updating inline status variable for every packet */
@@ -664,7 +676,7 @@ void cUdpDataReceiver::readData()
                     dTotalBytes += (s32CtPktRecvSize - RECORD_DATA_BUF_INDEX) ;
                 }
                 else
-                {
+                {// TODO: In my case, only write here
                     writeDataToBuffer_Inline(&s8ReceiveBuf[RECORD_DATA_BUF_INDEX],
                                   (s32CtPktRecvSize - RECORD_DATA_BUF_INDEX),
                                              false, false);
@@ -679,6 +691,7 @@ void cUdpDataReceiver::readData()
             }
             else if (u32CtPktNum < u32NextPktNum)
             {
+                printf("%d < %d", u32CtPktNum, u32NextPktNum);
                 if(seekOldIndexReadBuf(
                     ((u64BytesSentTillPrevPkt + s32PrevPktRecvSize - RECORD_DATA_BUF_INDEX)
                      - u64BytesSentTillCtPkt))
@@ -716,7 +729,8 @@ void cUdpDataReceiver::readData()
                 UpdateInlineStatus(true, u8DataTypeId);
             }
             else if (u32CtPktNum > u32NextPktNum)
-            {              
+            {         
+                printf("%d > %d", u32CtPktNum, u32NextPktNum);     
                 sRFDCCard_InlineStats.u64NumOfRecvdPackets[u8DataTypeId] ++;
 
                 u32NumOfDroppedPkts = u32CtPktNum - u32NextPktNum;
@@ -869,15 +883,26 @@ void cUdpDataReceiver::writeDataToBuffer_Inline(SINT8 *s8Buffer, UINT32 u32Size,
 {
     if((u32ReadPtrBufIndex + u32Size) > INLINE_BUF_SIZE)
     {        
-        if(bWaitForSignal)
-        {
-            /** Wait for write completion signal */
-            osalObj.WaitForSignal(&sgnFileWriteCompletionWaitEvent, NON_STOP);
+        // if(bWaitForSignal)
+        // {
+        //     /** Wait for write completion signal */
+        //     osalObj.WaitForSignal(&sgnFileWriteCompletionWaitEvent, NON_STOP);
+        // }
+        // else
+        // {
+        //     bWaitForSignal = true;
+        // }
+
+        // select partial data
+        u32PartFrame = u32ReadPtrBufIndex - u32FrameBufPtr;
+        if(u32PartFrame > 0) {
+            // 取出 (u32FrameBufPtr, u32ReadPtrBufIndex) 的数据
+            if(bBuf1Empty)
+                memcpy(s8FrameBuf, (s8RecBuf1+u32FrameBufPtr), u32PartFrame);
+            else
+                memcpy(s8FrameBuf, (s8RecBuf1+u32FrameBufPtr), u32PartFrame);
         }
-        else
-        {
-            bWaitForSignal = true;
-        }
+        u32FrameBufPtr = 0;
 
         /** Swapping buffers to continue read and parallel writing   */
         bBuf1Empty = !bBuf1Empty;
@@ -887,9 +912,7 @@ void cUdpDataReceiver::writeDataToBuffer_Inline(SINT8 *s8Buffer, UINT32 u32Size,
         u32ReadPtrBufIndex = 0;
 
         /** Signal to write thread to start writing */
-        pre_time_ = time_;
-        osalObj.SignalEvent(&sgnFileWriteInitWaitEvent);
-        time_ = ros::Time::now();
+        // osalObj.SignalEvent(&sgnFileWriteInitWaitEvent);
     }
 
     /** Store the current packet in buffer  */
@@ -900,6 +923,54 @@ void cUdpDataReceiver::writeDataToBuffer_Inline(SINT8 *s8Buffer, UINT32 u32Size,
     u32ReadPtrBufIndex += u32Size;
     if(!bOldPkt)
         u32ReadPtrSize += u32Size;
+    
+    /* select each frame and publish it */
+    if(bBuf1Empty) {
+        if(u32PartFrame > 0) {
+            if(u32ReadPtrBufIndex >= u32FrameLen - u32PartFrame) {
+                // 取出当前 (0, frame_len-part_frame) 数据
+                memcpy(&s8FrameBuf[u32PartFrame], s8RecBuf1, u32FrameLen-u32PartFrame);
+                u32FrameIndex++;
+                u32FrameBufPtr = u32FrameLen - u32PartFrame;
+                u32PartFrame = 0;
+                pubFrame();
+                time_ = ros::Time::now();
+            }
+        }
+        else {
+            if(u32ReadPtrBufIndex >= u32FrameBufPtr + u32FrameLen) {
+                // 取出 (frameBufPtr, frame_len) 数据
+                memcpy(s8FrameBuf, (s8RecBuf1+u32FrameBufPtr), u32FrameLen);
+                u32FrameIndex++;
+                u32FrameBufPtr += u32FrameLen;
+                pubFrame();
+                time_ = ros::Time::now();
+            }
+        }
+    }
+    else {
+        if(u32PartFrame > 0) {
+            if(u32ReadPtrBufIndex >= u32FrameLen - u32PartFrame) {
+                // 取出当前 (0, frame_len-part_frame) 数据
+                memcpy(&s8FrameBuf[u32PartFrame], s8RecBuf2, u32FrameLen-u32PartFrame);
+                u32FrameIndex++;
+                u32FrameBufPtr = u32FrameLen - u32PartFrame;
+                u32PartFrame = 0;
+                pubFrame();
+                time_ = ros::Time::now();
+            }
+        }
+        else {
+            if(u32ReadPtrBufIndex >= u32FrameBufPtr + u32FrameLen) {
+                // 取出 (frameBufPtr, frame_len) 数据
+                memcpy(s8FrameBuf, (s8RecBuf2+u32FrameBufPtr), u32FrameLen);
+                u32FrameIndex++;
+                u32FrameBufPtr += u32FrameLen;
+                pubFrame();
+                time_ = ros::Time::now();
+            }
+        }
+    }
 
 #ifdef LOG_DROPPED_PKTS_OFFSET
     /** Store the missed packet stats in log buffer */
@@ -969,6 +1040,29 @@ void cUdpDataReceiver::writeDataToBuffer_Inline(SINT8 *s8Buffer, UINT32 u32Size,
 
 }
 
+void cUdpDataReceiver::pubFrame() {
+    if(sRFDCCard_StartRecConfig.bReorderEnable)
+        ReorderAlgorithm(s8FrameBuf, u32FrameLen);
+    mmwave_radar::adcData msg;
+    msg.header.seq = u32FrameIndex;
+    msg.header.frame_id = "mmwave_radar";
+    msg.header.stamp = time_;
+    msg.size = u32FrameLen;
+    msg.data.resize(u32FrameLen);
+    msg.data.assign(s8FrameBuf, s8FrameBuf+u32FrameLen);
+    pub.publish(msg);
+}
+
+void cUdpDataReceiver::saveFrame() {
+    if(sRFDCCard_StartRecConfig.bReorderEnable)
+        ReorderAlgorithm(s8FrameBuf, u32FrameLen);
+    strcpy(strFileName1, strRecordFilePath);
+    strcat(strFileName1, std::to_string(u32FrameIndex).c_str());
+    strcat(strFileName1, REC_DATA_FILE_EXTENSION);
+    pRecordDataFile = fopen (strFileName1, "wb+");
+    fwrite((const SINT8 *)s8FrameBuf, 1, u32FrameLen, pRecordDataFile);
+}
+
 /** @fn void cUdpDataReceiver::Thread_WriteDataToFile()
  * @brief This thread function is to handle recording  data in files (inline processing)
  */
@@ -981,46 +1075,16 @@ void cUdpDataReceiver::Thread_WriteDataToFile()
 
         if(bBuf1Empty)
         {
-            // writeDataToFile_Inline(s8RecBuf2, u32WritePtrSize);
-            pubDataToServer_Inline(s8RecBuf2, u32WritePtrSize);
+            writeDataToFile_Inline(s8RecBuf2, u32WritePtrSize);
         }
         else
         {
-            // writeDataToFile_Inline(s8RecBuf1, u32WritePtrSize);
-            pubDataToServer_Inline(s8RecBuf1, u32WritePtrSize);
+            writeDataToFile_Inline(s8RecBuf1, u32WritePtrSize);
         }
 
         /** Signal ready for next file write */
         osalObj.SignalEvent(&sgnFileWriteCompletionWaitEvent);
     }
-}
-
-bool cUdpDataReceiver::pubDataToServer_Inline(SINT8 *s8Buffer, UINT32 u32Size){
-    /** Reordering data bytes */
-    if(sRFDCCard_StartRecConfig.bReorderEnable)
-    {
-        if(!ReorderAlgorithm(s8Buffer, u32Size))
-            return false;
-    }
-    /** Data file publish **/
-    mmwave_radar::adcData msg;
-    msg.header.seq = seq;
-    ++seq;
-    msg.header.frame_id = frame_id;
-    msg.header.stamp = pre_time_;
-    msg.size = u32Size;
-    msg.data.resize(u32Size);
-    msg.data.assign(s8Buffer, s8Buffer+u32Size);
-    pub.publish(msg);
-
-#ifdef LOG_DROPPED_PKTS_OFFSET
-
-	/** Logfile writing */
-    writeLogToFile_Inline();
-	
-#endif
-
-    return true;
 }
 
 /** @fn bool cUdpDataReceiver::writeDataToFile_Inline(SINT8 *s8Buffer, UINT32 u32Size)

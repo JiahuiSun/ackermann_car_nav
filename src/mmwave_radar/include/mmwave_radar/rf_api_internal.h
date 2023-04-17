@@ -123,8 +123,7 @@
 #define PAYLOAD_BYTES_PER_PACKET            1456
 
 /** Size for inline processing buffer                                        */
-// buffer size
-#define INLINE_BUF_SIZE                     196608 // (75 * 1000000)
+#define INLINE_BUF_SIZE                     (75 * 1000000) // 75 MB
 
 /** Size for inline processing log buffer                                    */
 #define INLINE_LOG_BUF_SIZE                 (12 * 100000) // 1.2 MB
