@@ -192,7 +192,6 @@ public:
     /* ROS publisher */
     std::string frame_id;
     ros::Publisher pub;
-    ros::Time pre_time_;
     ros::Time time_;
     mmwave_radar::adcData msg;
     /* select frame data */

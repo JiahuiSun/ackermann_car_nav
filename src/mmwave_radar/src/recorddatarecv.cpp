@@ -900,7 +900,7 @@ void cUdpDataReceiver::writeDataToBuffer_Inline(SINT8 *s8Buffer, UINT32 u32Size,
             if(bBuf1Empty)
                 memcpy(s8FrameBuf, (s8RecBuf1+u32FrameBufPtr), u32PartFrame);
             else
-                memcpy(s8FrameBuf, (s8RecBuf1+u32FrameBufPtr), u32PartFrame);
+                memcpy(s8FrameBuf, (s8RecBuf2+u32FrameBufPtr), u32PartFrame);
         }
         u32FrameBufPtr = 0;
 
