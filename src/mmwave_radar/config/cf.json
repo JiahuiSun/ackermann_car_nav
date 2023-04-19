@@ -31,7 +31,7 @@
     "dataFormatConfig": {
       "MSBToggle": 0,
       "laneFmtMap": 0,
-      "reorderEnable": 1,
+      "reorderEnable": 0,
       "dataPortConfig": [
         {
           "portIdx": 0,
