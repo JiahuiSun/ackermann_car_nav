@@ -995,7 +995,7 @@ void updateRecInlineStatus()
  */
 SINT32 main(SINT32 argc, SINT8* argv[])
 {
-    ros::init(argc, argv, "mmwave_radar_node");
+    ros::init(argc, argv, "mmwave_radar_publisher");
     ros::NodeHandle nh;
 
     /** Command line argument  1 - Command name */

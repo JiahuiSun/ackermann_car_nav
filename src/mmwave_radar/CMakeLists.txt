@@ -199,6 +199,7 @@ target_link_libraries(mmwave_radar_recv
 catkin_install_python(PROGRAMS
   script/xwr_start.py
   script/xwr_stop.py
+  script/mmwave_proc.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

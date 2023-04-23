@@ -1554,7 +1554,7 @@ UINT32 frameLen
     sprintf(s8DebugMsg, "\nu32FramesToCapture : %d", sStartRecConfigMode.u32FramesToCapture);
     DEBUG_FILE_WRITE(s8DebugMsg);
 #endif
-    objUdpDataRecv.pub = nh.advertise<mmwave_radar::adcData>("mmwave_radar_data", 10);
+    objUdpDataRecv.pub = nh.advertise<mmwave_radar::adcData>("mmwave_radar_raw_data", 10);
     objUdpDataRecv.time_ = ros::Time::now();
     objUdpDataRecv.u32FrameLen = frameLen;
 
