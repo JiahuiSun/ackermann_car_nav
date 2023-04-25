@@ -1,13 +1,16 @@
+#!/usr/bin/env python3
 import rospy
 from mmwave_radar.msg import adcData
+import pickle
 
 
+cnt = 1
 # pub = rospy.Publisher("mmwave_radar_point_cloud")
 def gen_pub_point_cloud(adcData):
-    print(type(adcData))
-    print(type(adcData.header))
-    print(type(adcData.size))
-    print(type(adcData.data))
+    global cnt
+    with open(f'adcData_{cnt}.pkl', 'wb') as f:
+        pickle.dump(adcData.data, f)
+    cnt += 1
 
 
 if __name__ == "__main__":
