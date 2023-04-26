@@ -73,7 +73,7 @@ def visualize(adc_data):
     first_pass, _ = np.apply_along_axis(func1d=dsp.ca_,
                                         axis=0,
                                         arr=heatmap_log,
-                                        l_bound=1.5,
+                                        l_bound=2.5,
                                         guard_len=4,
                                         noise_len=16)
 
@@ -81,7 +81,7 @@ def visualize(adc_data):
     second_pass, noise_floor = np.apply_along_axis(func1d=dsp.ca_,
                                                 axis=0,
                                                 arr=heatmap_log.T,
-                                                l_bound=2.5,
+                                                l_bound=3.5,
                                                 guard_len=4,
                                                 noise_len=16)
 

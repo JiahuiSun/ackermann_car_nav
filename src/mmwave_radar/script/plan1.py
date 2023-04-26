@@ -60,7 +60,7 @@ def visualize(adc_data):
     adc_data = ret.reshape((num_chirps*num_tx, num_rx, num_samples))
 
     # 3. range fft, 48 x 4 x 256
-    radar_cube = dsp.range_processing(adc_data)
+    radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
 
     # 4. Doppler processing, 256x16, 256x12x16
     det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=True, window_type_2d=Window.HAMMING)
@@ -71,16 +71,16 @@ def visualize(adc_data):
     thresholdDoppler, noiseFloorDoppler = np.apply_along_axis(func1d=dsp.ca_,
                                                                 axis=0,
                                                                 arr=fft2d_sum.T,
-                                                                l_bound=1.5,
+                                                                l_bound=20,
                                                                 guard_len=4,
-                                                                noise_len=16)
+                                                                noise_len=10)
     # 256x16
     thresholdRange, noiseFloorRange = np.apply_along_axis(func1d=dsp.ca_,
                                                             axis=0,
                                                             arr=fft2d_sum,
-                                                            l_bound=2.5,
+                                                            l_bound=20,
                                                             guard_len=4,
-                                                            noise_len=16)
+                                                            noise_len=10)
 
     thresholdDoppler, noiseFloorDoppler = thresholdDoppler.T, noiseFloorDoppler.T
     # 256x16
@@ -89,7 +89,7 @@ def visualize(adc_data):
     # Get indices of detected peaks
     full_mask = (det_doppler_mask & det_range_mask)
     det_peaks_indices = np.argwhere(full_mask == True)
-    # peakVals and SNR calculation, num_obj
+    # peakVals and SNR calculation
     peakVals = fft2d_sum[det_peaks_indices[:, 0], det_peaks_indices[:, 1]]
     snr = peakVals - noiseFloorRange[det_peaks_indices[:, 0], det_peaks_indices[:, 1]]
     
@@ -104,26 +104,15 @@ def visualize(adc_data):
     detObj2DRaw['SNR'] = snr.flatten()
 
     # Further peak pruning. This increases the point cloud density but helps avoid having too many detections around one object.
-    detObj2DRaw = dsp.prune_to_peaks(detObj2DRaw, det_matrix, num_chirps, reserve_neighbor=True)
+    # detObj2D = detObj2DRaw
+    detObj2D = dsp.prune_to_peaks(detObj2DRaw, det_matrix, num_chirps, reserve_neighbor=True)
     # --- Peak Grouping
-    detObj2D = dsp.peak_grouping_along_doppler(detObj2DRaw, det_matrix, num_chirps)
-    SNRThresholds2 = np.array([[2, 23], [10, 11.5], [35, 16.0]])
-    peakValThresholds2 = np.array([[4, 275], [1, 400], [500, 0]])
-    detObj2D = dsp.range_based_pruning(detObj2D, SNRThresholds2, peakValThresholds2, num_samples, 0.5, range_res)
+    # detObj2D = dsp.peak_grouping_along_doppler(detObj2D, det_matrix, num_chirps)
+    # SNRThresholds2 = np.array([[2, 23], [10, 11.5], [35, 16.0]])
+    # peakValThresholds2 = np.array([[4, 275], [1, 400], [500, 0]])
+    # detObj2D = dsp.range_based_pruning(detObj2D, SNRThresholds2, peakValThresholds2, num_samples, 0.5, range_res)
 
     # 6. MUSIC aoa
-    # azimuthInput = aoa_input[detObj2D['rangeIdx'], :, detObj2D['dopplerIdx']]
-
-    # x, y, z = dsp.naive_xyz(azimuthInput.T)
-    # xyzVecN = np.zeros((3, x.shape[0]))
-    # xyzVecN[0] = x * range_res * detObj2D['rangeIdx']
-    # xyzVecN[1] = y * range_res * detObj2D['rangeIdx']
-    # xyzVecN[2] = z * range_res * detObj2D['rangeIdx']
-
-    # Psi, Theta, Ranges, xyzVec = dsp.beamforming_naive_mixed_xyz(azimuthInput, detObj2D['rangeIdx'],
-    #                                                                 range_res, method='Capon')
-    # lines[0].set_data(xyzVecN[0], xyzVecN[1])
-
     # num_obj x 8
     azimuthInput = aoa_input[detObj2D['rangeIdx'], :8, detObj2D['dopplerIdx']].T
     elevationInput = np.concatenate([
