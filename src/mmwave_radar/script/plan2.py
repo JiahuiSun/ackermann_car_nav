@@ -1,14 +1,11 @@
-import mmwave
 import numpy as np
 import mmwave.dsp as dsp
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-# from mmwave.tracking import EKF
-# from mmwave.tracking import gtrack_visualize
+from mmwave.tracking import EKF
+from mmwave.dsp.utils import Window
 
-"""
-写一个循环，因为我一直在读数据，一直在生成点云
-"""
+
 num_chirps = 16
 num_samples = 256
 num_rx = 4
@@ -30,6 +27,8 @@ line0, = ax.plot([], [], 'ob', ms=2)
 line1, = ax.plot([], [], 'or', ms=2)
 lines = [line0, line1]
 
+tracker = EKF()
+
 
 def init_fig():
     ax.set_xlabel('x(m)')
@@ -47,6 +46,7 @@ def gen_data():
         yield adc_data
 
 def visualize(adc_data):
+    global tracker
     # 2. 整理数据格式 num_chirps, num_rx, num_samples
     ret = np.zeros(len(adc_data) // 2, dtype=complex)
     ret[0::2] = 1j * adc_data[0::4] + adc_data[2::4]
@@ -54,7 +54,7 @@ def visualize(adc_data):
     adc_data = ret.reshape((num_chirps*num_tx, num_rx, num_samples))
 
     # 3. range fft
-    radar_cube = dsp.range_processing(adc_data)
+    radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
 
     # 4. angle estimation
     range_azimuth = np.zeros((angle_bins, bins_processed))
@@ -118,10 +118,22 @@ def visualize(adc_data):
     dopplers = dopplerEst * doppler_res
     snrs = snrs
 
-    # 8. generate point cloud
+    # --- put into EKF
+    # tracker.update_point_cloud(ranges, azimuths, dopplers, snrs)
+    # targetDescr, tNum = tracker.step()
+    # x_pos_list, y_pos_list = [], []
+    # for target in targetDescr:
+    #     x_pos, y_pos, x_vel, y_vel = target.S[:4]
+    #     vec_mag = np.sqrt(x_vel ** 2 + y_vel ** 2)
+    #     if vec_mag < 0.2:
+    #         continue
+    #     x_pos_list.append(-x_pos)
+    #     y_pos_list.append(y_pos)
+    # lines[0].set_data(x_pos_list, y_pos_list)
+    # lines[1].set_data(x_pos, y_pos)
+
     x_pos = -ranges * np.sin(azimuths)
     y_pos = ranges * np.cos(azimuths)
-
     static_idx = dopplers == 0
     dynamic_idx = dopplers != 0
     lines[0].set_data(x_pos[static_idx], y_pos[static_idx])
