@@ -20,9 +20,9 @@ virt_ant_elevation = 2
 angle_range_azimuth = 90
 angle_range_elevation = 15
 angle_res = 1
-angle_bins = (angle_range_azimuth * 2) // angle_res + 1
+angle_bins_azimuth = (angle_range_azimuth * 2) // angle_res + 1
 angle_bins_elevation = (angle_range_elevation * 2) // angle_res + 1
-bins_processed = 112
+bins_processed = 128
 skip_size = 4
 range_res = 0.044
 doppler_res = 0.13
@@ -40,7 +40,7 @@ def gen_point_cloud(adc_data):
     radar_cube = dsp.range_processing(adc_data)
 
     # 4. angle estimation
-    range_azimuth = np.zeros((angle_bins, bins_processed))
+    range_azimuth = np.zeros((angle_bins_azimuth, bins_processed))
     beamWeights = np.zeros((virt_ant_azimuth, bins_processed), dtype=np.complex_)
     _, steering_vec_azimuth = dsp.gen_steering_vec(angle_range_azimuth, angle_res, virt_ant_azimuth)
     # static clutter removal, only detect moving objects
@@ -97,7 +97,7 @@ def gen_point_cloud(adc_data):
 
     # 7. convert bins to units 
     ranges = ranges * range_res
-    azimuths = (azimuths - (angle_bins // 2)) * (np.pi / 180)
+    azimuths = (azimuths - (angle_bins_azimuth // 2)) * (np.pi / 180)
     dopplers = dopplerEst * doppler_res
     snrs = snrs
 
@@ -188,7 +188,7 @@ def visualize(adc_data):
         elevations[i] = np.argmax(spectrum)
     
     # convert bins to units 
-    azimuths = (azimuths - (angle_bins // 2)) * (np.pi / 180)
+    azimuths = (azimuths - (angle_bins_azimuth // 2)) * (np.pi / 180)
     elevations = (elevations - (angle_bins_elevation // 2)) * (np.pi / 180)
     ranges = detObj2D['rangeIdx'] * range_res
     detObj2D['dopplerIdx'][detObj2D['dopplerIdx'] >= num_chirps/2] -= num_chirps

@@ -2,7 +2,7 @@ import numpy as np
 import mmwave.dsp as dsp
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from mmwave.tracking import EKF
+# from mmwave.tracking import EKF
 from mmwave.dsp.utils import Window
 
 
@@ -17,7 +17,7 @@ angle_range_azimuth = 90
 angle_range_elevation = 15
 angle_res = 1
 angle_bins = (angle_range_azimuth * 2) // angle_res + 1
-bins_processed = 112
+bins_processed = 128
 skip_size = 4
 range_res = 0.044
 doppler_res = 0.13
@@ -27,7 +27,7 @@ line0, = ax.plot([], [], 'ob', ms=2)
 line1, = ax.plot([], [], 'or', ms=2)
 lines = [line0, line1]
 
-tracker = EKF()
+# tracker = EKF()
 
 
 def init_fig():
@@ -46,7 +46,7 @@ def gen_data():
         yield adc_data
 
 def visualize(adc_data):
-    global tracker
+    # global tracker
     # 2. 整理数据格式 num_chirps, num_rx, num_samples
     ret = np.zeros(len(adc_data) // 2, dtype=complex)
     ret[0::2] = 1j * adc_data[0::4] + adc_data[2::4]
@@ -61,7 +61,7 @@ def visualize(adc_data):
     beamWeights = np.zeros((virt_ant_azimuth, bins_processed), dtype=np.complex_)
     _, steering_vec_azimuth = dsp.gen_steering_vec(angle_range_azimuth, angle_res, virt_ant_azimuth)
     # static clutter removal, only detect moving objects
-    radar_cube = radar_cube - radar_cube.mean(0)
+    # radar_cube = radar_cube - radar_cube.mean(0)
     radar_cube_azimuth = np.concatenate((radar_cube[0::3, ...], radar_cube[1::3, ...]), axis=1)
     for i in range(bins_processed):
         range_azimuth[:, i], beamWeights[:, i] = dsp.aoa_capon(radar_cube_azimuth[:, :, i].T, steering_vec_azimuth, magnitude=True)
@@ -141,7 +141,8 @@ def visualize(adc_data):
 
 
 ani = animation.FuncAnimation(
-    fig, visualize, gen_data, interval=50,
-    init_func=init_fig, repeat=False, save_count=10
+    fig, visualize, gen_data, interval=100,
+    init_func=init_fig, repeat=False, save_count=100
 )
+ani.save("plan2.gif", writer='imagemagick')
 plt.show()

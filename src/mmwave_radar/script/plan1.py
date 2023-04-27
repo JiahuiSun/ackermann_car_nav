@@ -6,13 +6,6 @@ from mmwave.dsp.utils import Window
 from music import aoa_music_1D
 
 
-"""
-range fft
-doppler fft
-object detection
-angle estimation
-clustering：每个人身上的点时一类
-"""
 num_chirps = 16
 num_samples = 256
 num_rx = 4
@@ -23,10 +16,8 @@ virt_ant_elevation = 2
 angle_range_azimuth = 90
 angle_range_elevation = 15
 angle_res = 1
-angle_bins = (angle_range_azimuth * 2) // angle_res + 1
+angle_bins_azimuth = (angle_range_azimuth * 2) // angle_res + 1
 angle_bins_elevation = (angle_range_elevation * 2) // angle_res + 1
-bins_processed = 112
-skip_size = 4
 range_res = 0.044
 doppler_res = 0.13
 
@@ -63,7 +54,7 @@ def visualize(adc_data):
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
 
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=True, window_type_2d=Window.HAMMING)
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
 
     # 5. Object detection
     fft2d_sum = det_matrix.astype(np.int64)
@@ -72,15 +63,15 @@ def visualize(adc_data):
                                                                 axis=0,
                                                                 arr=fft2d_sum.T,
                                                                 l_bound=20,
-                                                                guard_len=4,
-                                                                noise_len=10)
+                                                                guard_len=2,
+                                                                noise_len=4)
     # 256x16
     thresholdRange, noiseFloorRange = np.apply_along_axis(func1d=dsp.ca_,
                                                             axis=0,
                                                             arr=fft2d_sum,
-                                                            l_bound=20,
+                                                            l_bound=30,
                                                             guard_len=4,
-                                                            noise_len=10)
+                                                            noise_len=16)
 
     thresholdDoppler, noiseFloorDoppler = thresholdDoppler.T, noiseFloorDoppler.T
     # 256x16
@@ -132,7 +123,7 @@ def visualize(adc_data):
         elevations[i] = np.argmax(spectrum)
     
     # convert bins to units 
-    azimuths = (azimuths - (angle_bins // 2)) * (np.pi / 180)
+    azimuths = (azimuths - (angle_bins_azimuth // 2)) * (np.pi / 180)
     elevations = (elevations - (angle_bins_elevation // 2)) * (np.pi / 180)
     ranges = detObj2D['rangeIdx'] * range_res
     detObj2D['dopplerIdx'][detObj2D['dopplerIdx'] >= num_chirps/2] -= num_chirps
@@ -148,7 +139,8 @@ def visualize(adc_data):
 
 
 ani = animation.FuncAnimation(
-    fig, visualize, gen_data, interval=50,
-    init_func=init_fig, repeat=False, save_count=10
+    fig, visualize, gen_data, interval=100,
+    init_func=init_fig, repeat=False, save_count=100
 )
+ani.save("plan1.gif", writer='imagemagick')
 plt.show()
