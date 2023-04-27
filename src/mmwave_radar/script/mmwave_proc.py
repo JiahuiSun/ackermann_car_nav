@@ -29,7 +29,7 @@ doppler_res = 0.13
 
 pub = rospy.Publisher("mmwave_radar_point_cloud", mmwavePointCloud, queue_size=10)
 
-def gen_point_cloud(adc_data):
+def gen_point_cloud_plan2(adc_data):
     # 2. 整理数据格式 num_chirps, num_rx, num_samples
     ret = np.zeros(len(adc_data) // 2, dtype=complex)
     ret[0::2] = 1j * adc_data[0::4] + adc_data[2::4]
@@ -37,14 +37,14 @@ def gen_point_cloud(adc_data):
     adc_data = ret.reshape((num_chirps*num_tx, num_rx, num_samples))
 
     # 3. range fft
-    radar_cube = dsp.range_processing(adc_data)
+    radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
 
     # 4. angle estimation
     range_azimuth = np.zeros((angle_bins_azimuth, bins_processed))
     beamWeights = np.zeros((virt_ant_azimuth, bins_processed), dtype=np.complex_)
     _, steering_vec_azimuth = dsp.gen_steering_vec(angle_range_azimuth, angle_res, virt_ant_azimuth)
     # static clutter removal, only detect moving objects
-    radar_cube = radar_cube - radar_cube.mean(0)
+    # radar_cube = radar_cube - radar_cube.mean(0)
     radar_cube_azimuth = np.concatenate((radar_cube[0::3, ...], radar_cube[1::3, ...]), axis=1)
     for i in range(bins_processed):
         range_azimuth[:, i], beamWeights[:, i] = dsp.aoa_capon(radar_cube_azimuth[:, :, i].T, steering_vec_azimuth, magnitude=True)
@@ -56,7 +56,7 @@ def gen_point_cloud(adc_data):
     first_pass, _ = np.apply_along_axis(func1d=dsp.ca_,
                                         axis=0,
                                         arr=heatmap_log,
-                                        l_bound=1.5,
+                                        l_bound=2.5,
                                         guard_len=4,
                                         noise_len=16)
 
@@ -64,7 +64,7 @@ def gen_point_cloud(adc_data):
     second_pass, noise_floor = np.apply_along_axis(func1d=dsp.ca_,
                                                 axis=0,
                                                 arr=heatmap_log.T,
-                                                l_bound=2.5,
+                                                l_bound=3.5,
                                                 guard_len=4,
                                                 noise_len=16)
 
@@ -107,7 +107,7 @@ def gen_point_cloud(adc_data):
     return x_pos, y_pos, dopplers
 
 
-def visualize(adc_data):
+def gen_point_cloud_plan1(adc_data):
     # 2. 整理数据格式 Tx*num_chirps, num_rx, num_samples
     # adc_data 48 x 4 x 256
     ret = np.zeros(len(adc_data) // 2, dtype=complex)
@@ -119,7 +119,7 @@ def visualize(adc_data):
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
 
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=True, window_type_2d=Window.HAMMING)
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
 
     # 5. Object detection
     fft2d_sum = det_matrix.astype(np.int64)
@@ -128,15 +128,15 @@ def visualize(adc_data):
                                                                 axis=0,
                                                                 arr=fft2d_sum.T,
                                                                 l_bound=20,
-                                                                guard_len=4,
-                                                                noise_len=10)
+                                                                guard_len=2,
+                                                                noise_len=4)
     # 256x16
     thresholdRange, noiseFloorRange = np.apply_along_axis(func1d=dsp.ca_,
                                                             axis=0,
                                                             arr=fft2d_sum,
-                                                            l_bound=20,
+                                                            l_bound=30,
                                                             guard_len=4,
-                                                            noise_len=10)
+                                                            noise_len=16)
 
     thresholdDoppler, noiseFloorDoppler = thresholdDoppler.T, noiseFloorDoppler.T
     # 256x16
@@ -206,7 +206,7 @@ def pub_point_cloud(adcData):
     adc_pack = struct.pack(">196608b", *adcData.data)
     adc_unpack = np.frombuffer(adc_pack, dtype=np.int16)
     st2 = time.time()
-    x_pos, y_pos, velocity = visualize(adc_unpack)
+    x_pos, y_pos, velocity = gen_point_cloud_plan2(adc_unpack)
     # 在python下组织消息格式，还从未操作过
     point_cloud = mmwavePointCloud()
     point_cloud.header = adcData.header
