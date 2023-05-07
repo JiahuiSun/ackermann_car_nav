@@ -4,7 +4,7 @@
 
 
 char strFileName1[255];
-char strRecordFilePath[] = "/home/dingrong/Code/ackermann_car_nav/data/test_";
+char strRecordFilePath[] = "/home/dingrong/Code/ackermann_car_nav/data/frame_";
 char REC_DATA_FILE_EXTENSION[] = ".bin";
 int u32DataFileCount = 0;
 
@@ -14,6 +14,8 @@ void saveData(const mmwave_radar::adcData::ConstPtr& msg_ptr) {
     u32DataFileCount++;
     strcpy(strFileName1, strRecordFilePath);
     strcat(strFileName1, std::to_string(u32DataFileCount).c_str());
+    strcat(strFileName1, "stamp_");
+    strcat(strFileName1, std::to_string(msg_ptr->header.stamp.toSec()).c_str());
     strcat(strFileName1, REC_DATA_FILE_EXTENSION);
     FILE *pRecordDataFile = fopen(strFileName1, "wb+");
     fwrite(msg_ptr->data.data(), sizeof msg_ptr->data[0], msg_ptr->data.size(), pRecordDataFile);
