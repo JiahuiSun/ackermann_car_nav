@@ -40,7 +40,6 @@
     <arg name="preset" value="true"/>
   </include>
   </group>
-   
 
   <!--当开启导航功能时 启用导航算法选择-->
   <!--当开启2D或3D导航功能时-->
@@ -70,5 +69,3 @@
     <arg name="is_cartographer" value="$(arg is_cartographer)"/>
   </include>
  </launch>
-
-

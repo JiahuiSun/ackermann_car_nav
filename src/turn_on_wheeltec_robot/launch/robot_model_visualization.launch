@@ -20,6 +20,7 @@
   <!-- car_mode and tf  senior_akm-->
   <group if="$(eval car_mode == 'senior_akm')">
    <node pkg="tf" type="static_transform_publisher" name="base_to_laser" args="0.26 0.00 0.228 3.14 0 0  base_footprint laser 100" />
+   <!-- TODO: 修改激光雷达坐标，增加base_to_radar -->
    <node pkg="tf" type="static_transform_publisher" name="base_to_camera" args="0.34 0.00 0.178 0 0 0   base_footprint camera_link 100" />
    <node pkg="tf" type="static_transform_publisher" name="base_to_gyro" args="0 0 0 0 0 0 base_footprint gyro_link 100" />
   </group>

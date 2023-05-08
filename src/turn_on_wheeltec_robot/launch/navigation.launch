@@ -4,6 +4,7 @@
  <include file="$(find turn_on_wheeltec_robot)/launch/turn_on_wheeltec_robot.launch">
     <arg name="navigation"  default="true"/>
  </include>
+
  <!-- turn on lidar开启雷达  -->
  <include file="$(find turn_on_wheeltec_robot)/launch/wheeltec_lidar.launch" />
 
