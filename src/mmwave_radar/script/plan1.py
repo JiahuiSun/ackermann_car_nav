@@ -96,7 +96,7 @@ def visualize(adc_data):
 
     # Further peak pruning. This increases the point cloud density but helps avoid having too many detections around one object.
     # detObj2D = detObj2DRaw
-    detObj2D = dsp.prune_to_peaks(detObj2DRaw, det_matrix, num_chirps, reserve_neighbor=True)
+    detObj2D = dsp.prune_to_peaks(detObj2DRaw, det_matrix, num_chirps, reserve_neighbor=False)
     # --- Peak Grouping
     # detObj2D = dsp.peak_grouping_along_doppler(detObj2D, det_matrix, num_chirps)
     # SNRThresholds2 = np.array([[2, 23], [10, 11.5], [35, 16.0]])
@@ -142,5 +142,5 @@ ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
     init_func=init_fig, repeat=False, save_count=100
 )
-ani.save("plan1.gif", writer='imagemagick')
+# ani.save("plan1.gif", writer='imagemagick')
 plt.show()
