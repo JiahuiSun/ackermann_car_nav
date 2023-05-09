@@ -48,20 +48,24 @@ def gen_data():
 def visualize(adc_data):
     # global tracker
     # 2. 整理数据格式 num_chirps, num_rx, num_samples
+    # adc_data 48 x 4 x 256
     ret = np.zeros(len(adc_data) // 2, dtype=complex)
     ret[0::2] = 1j * adc_data[0::4] + adc_data[2::4]
     ret[1::2] = 1j * adc_data[1::4] + adc_data[3::4]
     adc_data = ret.reshape((num_chirps*num_tx, num_rx, num_samples))
 
     # 3. range fft
+    # radar_cube 48 x 4 x 256
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
 
     # 4. angle estimation
+    # range_azimuth 181 x 128
     range_azimuth = np.zeros((angle_bins, bins_processed))
     beamWeights = np.zeros((virt_ant_azimuth, bins_processed), dtype=np.complex_)
     _, steering_vec_azimuth = dsp.gen_steering_vec(angle_range_azimuth, angle_res, virt_ant_azimuth)
     # static clutter removal, only detect moving objects
     # radar_cube = radar_cube - radar_cube.mean(0)
+    # radar_cube_azimuth 16 x 8 x 256
     radar_cube_azimuth = np.concatenate((radar_cube[0::3, ...], radar_cube[1::3, ...]), axis=1)
     for i in range(bins_processed):
         range_azimuth[:, i], beamWeights[:, i] = dsp.aoa_capon(radar_cube_azimuth[:, :, i].T, steering_vec_azimuth, magnitude=True)
@@ -101,22 +105,23 @@ def visualize(adc_data):
     # 6. doppler estimation
     # --- get peak indices
     # beamWeights should be selected based on the range indices from CFAR.
+    # dopplerFFTInput 16 x 8 x 80
     dopplerFFTInput = radar_cube_azimuth[:, :, ranges]
     beamWeights  = beamWeights[:, ranges]
 
     # --- estimate doppler values
     # For each detected object and for each chirp combine the signals from 4 Rx, i.e.
     # For each detected object, matmul (numChirpsPerFrame, numRxAnt) with (numRxAnt) to (numChirpsPerFrame)
+    # dopplerFFTInput 16 x 80
     dopplerFFTInput = np.einsum('ijk,jk->ik', dopplerFFTInput, beamWeights)
     dopplerEst = np.fft.fft(dopplerFFTInput, axis=0)
     dopplerEst = np.argmax(dopplerEst, axis=0)
+    # TODO: 为啥角度按中心平行搬移1半，而速度把超过中心的搬移到负值
     dopplerEst[dopplerEst[:]>=num_chirps/2] -= num_chirps
-
     # 7. convert bins to units 
     ranges = ranges * range_res
     azimuths = (azimuths - (angle_bins // 2)) * (np.pi / 180)
     dopplers = dopplerEst * doppler_res
-    snrs = snrs
 
     # --- put into EKF
     # tracker.update_point_cloud(ranges, azimuths, dopplers, snrs)
