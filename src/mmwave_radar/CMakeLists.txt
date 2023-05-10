@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  sensor_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -106,7 +107,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES mmwave_radar
- CATKIN_DEPENDS message_runtime roscpp rospy std_msgs
+ CATKIN_DEPENDS message_runtime roscpp rospy std_msgs sensor_msgs
 #  DEPENDS system_lib
 )
 

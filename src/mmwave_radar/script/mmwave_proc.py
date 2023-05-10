@@ -2,6 +2,8 @@
 import rospy
 from mmwave_radar.msg import adcData
 from mmwave_radar.msg import mmwavePointCloud
+from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointField
 import numpy as np
 import struct
 import mmwave.dsp as dsp
@@ -27,7 +29,7 @@ skip_size = 4
 range_res = 0.044
 doppler_res = 0.13
 
-pub = rospy.Publisher("mmwave_radar_point_cloud", mmwavePointCloud, queue_size=10)
+pub = rospy.Publisher("mmwave_radar_point_cloud", PointCloud2, queue_size=10)
 
 def gen_point_cloud_plan2(adc_data):
     # 2. 整理数据格式 num_chirps, num_rx, num_samples
@@ -208,14 +210,31 @@ def pub_point_cloud(adcData):
     st2 = time.time()
     x_pos, y_pos, z_pos, velocity = gen_point_cloud_plan1(adc_unpack)
     # 在python下组织消息格式，还从未操作过
-    point_cloud = mmwavePointCloud()
-    point_cloud.header = adcData.header
-    point_cloud.size = adcData.size
-    point_cloud.x_pos = x_pos
-    point_cloud.y_pos = y_pos
-    point_cloud.z_pos = z_pos
-    point_cloud.velocity = velocity
-    pub.publish(point_cloud)
+    points = np.array([x_pos, y_pos, z_pos]).T
+    msg = PointCloud2()
+    msg.header = adcData.header
+    msg.height = 1
+    msg.width = points.shape[0]
+    msg.fields = [
+        PointField('x', 0, PointField.FLOAT32, 1),
+        PointField('y', 4, PointField.FLOAT32, 1),
+        PointField('z', 8, PointField.FLOAT32, 1)
+    ]
+    msg.is_bigendian = False
+    msg.point_step = 12
+    msg.row_step = msg.point_step * points.shape[0]
+    msg.is_dense = False
+    msg.data = np.asarray(points, np.float32).tostring()
+    pub.publish(msg)
+    
+    # point_cloud = mmwavePointCloud()
+    # point_cloud.header = adcData.header
+    # point_cloud.size = adcData.size
+    # point_cloud.x_pos = x_pos
+    # point_cloud.y_pos = y_pos
+    # point_cloud.z_pos = z_pos
+    # point_cloud.velocity = velocity
+    # pub.publish(point_cloud)
     st3 = time.time()
     # print(f"parse data cost: {st2-st1}s")
     # print(f"gen point cloud cost: {st3-st2}s")
