@@ -197,7 +197,7 @@ def gen_point_cloud_plan1(adc_data):
     x_pos = -ranges * np.sin(azimuths) * np.cos(elevations)
     y_pos = ranges * np.cos(azimuths) * np.cos(elevations)
     z_pos = ranges * np.sin(elevations)
-    return x_pos, y_pos, dopplers
+    return x_pos, y_pos, z_pos, dopplers
 
 
 def pub_point_cloud(adcData):
@@ -206,19 +206,20 @@ def pub_point_cloud(adcData):
     adc_pack = struct.pack(">196608b", *adcData.data)
     adc_unpack = np.frombuffer(adc_pack, dtype=np.int16)
     st2 = time.time()
-    x_pos, y_pos, velocity = gen_point_cloud_plan1(adc_unpack)
+    x_pos, y_pos, z_pos, velocity = gen_point_cloud_plan1(adc_unpack)
     # 在python下组织消息格式，还从未操作过
     point_cloud = mmwavePointCloud()
     point_cloud.header = adcData.header
     point_cloud.size = adcData.size
     point_cloud.x_pos = x_pos
     point_cloud.y_pos = y_pos
+    point_cloud.z_pos = z_pos
     point_cloud.velocity = velocity
     pub.publish(point_cloud)
     st3 = time.time()
-    print(f"parse data cost: {st2-st1}s")
-    print(f"gen point cloud cost: {st3-st2}s")
-    print(f"total cost: {st3-st1}s")
+    # print(f"parse data cost: {st2-st1}s")
+    # print(f"gen point cloud cost: {st3-st2}s")
+    # print(f"total cost: {st3-st1}s")
 
 
 if __name__ == "__main__":
