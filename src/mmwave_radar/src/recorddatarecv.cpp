@@ -598,7 +598,7 @@ void cUdpDataReceiver::readData()
                 u32FrameIndex = 0;
                 u32FrameBufPtr = 0;
                 u32PartFrame = 0;
-                msg.header.frame_id = "mmwave_radar";
+                msg.header.frame_id = "radar";
                 msg.size = u32FrameLen;
                 msg.data.resize(u32FrameLen);
 
@@ -1045,7 +1045,7 @@ void cUdpDataReceiver::pubFrame() {
         ReorderAlgorithm(s8FrameBuf, u32FrameLen);
     mmwave_radar::adcData msg;
     msg.header.seq = u32FrameIndex;
-    msg.header.frame_id = "mmwave_radar";
+    msg.header.frame_id = "radar";
     msg.header.stamp = time_;
     msg.size = u32FrameLen;
     msg.data.resize(u32FrameLen);

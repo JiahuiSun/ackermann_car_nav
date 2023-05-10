@@ -4,6 +4,7 @@
 	<arg name="xwr_cli_port" value="/dev/ttyACM0" doc="xWR1xxx radar port" />
 	<arg name="frame_len" value="196608" doc="the number of bytes per frame" />
 
+	<node pkg="mmwave_radar" type="mmwave_proc.py" name="mmwave_proc" output="screen" /> 
 	<node pkg="mmwave_radar" type="mmwave_radar_ctrl" name="mmwave_radar_ctrl" args="fpga $(arg dca_config)" output="screen" /> 
 	<node pkg="mmwave_radar" type="mmwave_radar_record" name="mmwave_radar_record" args="start_record $(arg dca_config) $(arg frame_len)" output="screen" /> 
 	<node pkg="mmwave_radar" type="xwr_start.py" name="xwr_start" args="$(arg xwr_cli_port) $(arg xwr_config)" output="screen" /> 
