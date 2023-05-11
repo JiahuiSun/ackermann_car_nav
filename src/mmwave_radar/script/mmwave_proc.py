@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import rospy
 from mmwave_radar.msg import adcData
-from mmwave_radar.msg import mmwavePointCloud
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs.msg import PointField
 import numpy as np
@@ -11,7 +10,7 @@ import time
 from music import aoa_music_1D
 from mmwave.dsp.utils import Window
 
-
+# TODO:
 num_chirps = 16
 num_samples = 256
 num_rx = 4
@@ -121,7 +120,7 @@ def gen_point_cloud_plan1(adc_data):
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
 
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=num_tx, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
 
     # 5. Object detection
     fft2d_sum = det_matrix.astype(np.int64)
@@ -129,14 +128,14 @@ def gen_point_cloud_plan1(adc_data):
     thresholdDoppler, noiseFloorDoppler = np.apply_along_axis(func1d=dsp.ca_,
                                                                 axis=0,
                                                                 arr=fft2d_sum.T,
-                                                                l_bound=20,
+                                                                l_bound=20,  # TODO: cfar参数
                                                                 guard_len=2,
                                                                 noise_len=4)
     # 256x16
     thresholdRange, noiseFloorRange = np.apply_along_axis(func1d=dsp.ca_,
                                                             axis=0,
                                                             arr=fft2d_sum,
-                                                            l_bound=30,
+                                                            l_bound=30,  # TODO: 
                                                             guard_len=4,
                                                             noise_len=16)
 
@@ -205,12 +204,12 @@ def gen_point_cloud_plan1(adc_data):
 def pub_point_cloud(adcData):
     st1 = time.time()
     global pub
+    # TODO:
     adc_pack = struct.pack(">196608b", *adcData.data)
     adc_unpack = np.frombuffer(adc_pack, dtype=np.int16)
     st2 = time.time()
     x_pos, y_pos, z_pos, velocity = gen_point_cloud_plan1(adc_unpack)
-    # 在python下组织消息格式，还从未操作过
-    points = np.array([x_pos, y_pos, z_pos]).T
+    points = np.array([x_pos, y_pos, z_pos, velocity]).T
     msg = PointCloud2()
     msg.header = adcData.header
     msg.height = 1
@@ -218,23 +217,15 @@ def pub_point_cloud(adcData):
     msg.fields = [
         PointField('x', 0, PointField.FLOAT32, 1),
         PointField('y', 4, PointField.FLOAT32, 1),
-        PointField('z', 8, PointField.FLOAT32, 1)
+        PointField('z', 8, PointField.FLOAT32, 1),
+        PointField('vel', 12, PointField.FLOAT32, 1)
     ]
     msg.is_bigendian = False
-    msg.point_step = 12
+    msg.point_step = 16
     msg.row_step = msg.point_step * points.shape[0]
-    msg.is_dense = False
+    msg.is_dense = True
     msg.data = np.asarray(points, np.float32).tostring()
     pub.publish(msg)
-    
-    # point_cloud = mmwavePointCloud()
-    # point_cloud.header = adcData.header
-    # point_cloud.size = adcData.size
-    # point_cloud.x_pos = x_pos
-    # point_cloud.y_pos = y_pos
-    # point_cloud.z_pos = z_pos
-    # point_cloud.velocity = velocity
-    # pub.publish(point_cloud)
     st3 = time.time()
     # print(f"parse data cost: {st2-st1}s")
     # print(f"gen point cloud cost: {st3-st2}s")

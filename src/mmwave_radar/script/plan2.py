@@ -149,5 +149,5 @@ ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
     init_func=init_fig, repeat=False, save_count=100
 )
-ani.save("plan2.gif", writer='imagemagick')
+# ani.save("plan2.gif", writer='imagemagick')
 plt.show()
