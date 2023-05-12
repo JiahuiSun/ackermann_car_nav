@@ -9,7 +9,7 @@
  <include file="$(find turn_on_wheeltec_robot)/launch/wheeltec_lidar.launch" />
 
  <!-- 设置需要用于导航的地图  -->
- <arg name="map_file" default="$(find turn_on_wheeltec_robot)/map/software_floor3.yaml"/>
+ <arg name="map_file" default="$(find turn_on_wheeltec_robot)/map/software_floor1.yaml"/>
  <node name="map_server_for_test" pkg="map_server" type="map_server" args="$(arg map_file)">
  </node>
 

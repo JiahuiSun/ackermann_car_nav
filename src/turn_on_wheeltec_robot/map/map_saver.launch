@@ -1,4 +1,4 @@
 <launch>
-	<node pkg="map_server" type="map_saver" name="map_saver1" args="-f /home/dingrong/Code/ackermann_car_nav/src/turn_on_wheeltec_robot/map/software_floor3" output="screen">	
+	<node pkg="map_server" type="map_saver" name="map_saver1" args="-f /home/dingrong/Code/ackermann_car_nav/src/turn_on_wheeltec_robot/map/software_floor1" output="screen">	
 	</node>
 </launch>
