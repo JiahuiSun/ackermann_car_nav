@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from nlos_proc import transform
+from nlos_sensing import transform
 import rosbag
 from sensor_msgs import point_cloud2
 
