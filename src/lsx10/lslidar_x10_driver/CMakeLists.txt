@@ -12,7 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   diagnostic_updater
   nodelet
-
+  laser_geometry
   lslidar_x10_msgs
 )
 

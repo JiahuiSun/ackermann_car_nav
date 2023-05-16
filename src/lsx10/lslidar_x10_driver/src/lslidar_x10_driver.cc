@@ -53,11 +53,13 @@ void LslidarX10Driver::initParam() {
 	difop_switch = nh.subscribe<std_msgs::Int8>("lslidar_order", 1 ,&LslidarX10Driver::lidar_order,this);          //转速输入
     std::string frame_id = "laser";
     std::string scan_topic = "/scan";
+    std::string laser_pc_topic = "/laser_point_cloud";
     std::string lidar_name_ = "M10";
     is_start = true;
     pnh.param("lidar_name", lidar_name, lidar_name_);
     pnh.param("frame_id", frame_id_, frame_id);
     pnh.param("scan_topic", scan_topic_, scan_topic);
+    pnh.param("laser_pc_topic", laser_pc_topic_, laser_pc_topic);
     pnh.param<double>("min_distance",min_distance,0);
     pnh.param<double>("max_distance",max_distance,30);
     pnh.param<bool>("use_gps_ts", use_gps_ts, false);
@@ -330,6 +332,7 @@ bool LslidarX10Driver::initialize() {
         open_serial();
     }
     pub_ = nh.advertise<sensor_msgs::LaserScan>(scan_topic_, 3);
+    pub_laser = nh.advertise<sensor_msgs::PointCloud2>(laser_pc_topic_, 3);
 
     ROS_INFO("Initialised lslidar x10 without error");
     return true;
@@ -660,6 +663,9 @@ void LslidarX10Driver::pubScanThread()
 
 	count_num = 0;
     pub_.publish(msg);
+    sensor_msgs::PointCloud2 cloud;
+    projector_.projectLaser(msg, cloud);
+    pub_laser.publish(cloud);
     wait_for_wake = true;
   }
 }

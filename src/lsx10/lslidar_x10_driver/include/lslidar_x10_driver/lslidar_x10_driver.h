@@ -32,6 +32,8 @@
 #include <diagnostic_updater/publisher.h>
 #include "lsiosr.h"
 #include <sensor_msgs/LaserScan.h>
+#include <sensor_msgs/PointCloud2.h>
+#include "laser_geometry/laser_geometry.h"
 
 #include <lslidar_x10_msgs/LslidarX10Packet.h>
 #include <std_msgs/Byte.h>
@@ -97,6 +99,7 @@ private:
     std::string frame_id_;
     std::string lidar_name;
     std::string scan_topic_;
+    std::string laser_pc_topic_;
     std::string dump_file;
 
     double angle_able_min;
@@ -118,6 +121,9 @@ private:
     ros::Publisher pub_;
     uint64_t sweep_end_time_gps;
     uint64_t sweep_end_time_hardware;
+    // LaserScan to PointCloud2
+    laser_geometry::LaserProjection projector_;
+    ros::Publisher pub_laser;
 
     int idx = 0;
     int link_time = 0;
