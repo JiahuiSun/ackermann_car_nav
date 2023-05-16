@@ -22,7 +22,7 @@ def init_fig():
 
 def gen_data():
     for topic, msg, t in rosbag.Bag(
-        "/home/dingrong/Code/ackermann_car_nav/test_2023-05-11-19-45-10.bag", 'r'):
+        "/home/dingrong/Code/ackermann_car_nav/data/test_2023-05-11-19-45-10.bag", 'r'):
         if topic == '/mmwave_radar_point_cloud':
             points = point_cloud2.read_points_list(
                 msg, field_names=['x', 'y', 'z', 'vel']
@@ -49,5 +49,5 @@ ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
     init_func=init_fig, repeat=False, save_count=100
 )
-ani.save("plan1-2.gif", writer='imagemagick')
+# ani.save("plan1-2.gif", writer='imagemagick')
 plt.show()
