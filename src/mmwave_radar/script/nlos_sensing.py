@@ -50,7 +50,7 @@ def transform(radar_xy, delta_x, delta_y, yaw):
         world_xy: Nx2
     """
     yaw = yaw * np.pi / 180
-    rotation_matrix = np.array([[np.cos(yaw), np.sin(yaw)], [-np.sin(yaw), np.cos(yaw)]])
-    translation_vector = np.array([delta_x, delta_y]).reshape(-1, 1)
-    world_xy = (rotation_matrix.dot(radar_xy.T) + translation_vector).T
+    rotation_matrix = np.array([[np.cos(yaw), -np.sin(yaw)], [np.sin(yaw), np.cos(yaw)]])
+    translation_vector = np.array([[delta_x, delta_y]])
+    world_xy = radar_xy.dot(rotation_matrix) + translation_vector
     return world_xy
