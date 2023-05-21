@@ -12,23 +12,15 @@ from nlos_sensing import transform
 cluster = DBSCAN(eps=0.1, min_samples=5)
 
 fig, ax = plt.subplots(figsize=(16, 16))
-line0, = ax.plot([], [], 'ro', ms=2)
-line1, = ax.plot([], [], 'go', ms=2)
-line2, = ax.plot([], [], 'bo', ms=2)
-line3, = ax.plot([], [], 'co', ms=2)
-line4, = ax.plot([], [], 'yo', ms=2)
-line5, = ax.plot([], [], 'wo', ms=2)
-line6, = ax.plot([], [], 'mo', ms=2)
-line7, = ax.plot([], [], 'ko', ms=1)
-lines = [line0, line1, line2, line3, line4, line5, line6, line7]
+color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'wo', 'mo', 'ko']
 
 
 def init_fig():
+    ax.clear()
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
     ax.set_xlim([-5, 5])
     ax.set_ylim([-5, 5])
-    return lines
 
 def gen_data():
     for topic, msg, t in rosbag.Bag(
@@ -50,6 +42,7 @@ def gen_data():
             yield point_cloud, msg.header.seq
 
 def visualize_cluster(result):
+    init_fig()
     all_point_cloud, seq = result
     # 聚类，对每一类进行ransac拟合直线
     db = cluster.fit(all_point_cloud)
@@ -62,24 +55,26 @@ def visualize_cluster(result):
             continue
         coef, inlier_mask = fit_line_ransac(point_cloud)
         inlier_points = point_cloud[inlier_mask]
-        lines[label].set_data(inlier_points[:, 0], inlier_points[:, 1])
+        ax.plot(inlier_points[:, 0], inlier_points[:, 1], color_panel[label], ms=2)
     ax.set_title(f"frame id: {seq}")
 
 def visualize(result):
+    init_fig()
     point_cloud, seq = result
     fitted_lines = []
-    for i in range(4):
-        if len(point_cloud) < 50:
+    for i in range(3):
+        if len(point_cloud) < 100:
             break
         coef, inlier_mask = fit_line_ransac(point_cloud)
         inlier_points = point_cloud[inlier_mask]
-        if len(inlier_points) < 20:
+        print(f"line {i}: {len(inlier_points)}")
+        if len(inlier_points) < 50:
             continue
-        lines[i].set_data(inlier_points[:, 0], inlier_points[:, 1])
+        ax.plot(inlier_points[:, 0], inlier_points[:, 1], color_panel[i], ms=2)
         fitted_lines.append([coef, inlier_mask])
         outlier_mask = np.logical_not(inlier_mask)
         point_cloud = point_cloud[outlier_mask]
-    lines[-1].set_data(point_cloud[:, 0], point_cloud[:, 1])
+    ax.plot(point_cloud[:, 0], point_cloud[:, 1], color_panel[-1], ms=2)
     ax.set_title(f"frame id: {seq}")
 
 ani = animation.FuncAnimation(
