@@ -10,6 +10,7 @@ from nlos_sensing import transform
 
 
 cluster = DBSCAN(eps=0.1, min_samples=5)
+filter = DBSCAN(eps=1, min_samples=10)
 
 fig, ax = plt.subplots(figsize=(16, 16))
 color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'wo', 'mo', 'ko']
@@ -66,6 +67,10 @@ def visualize(result):
         if len(point_cloud) < 100:
             break
         coef, inlier_mask = fit_line_ransac(point_cloud)
+        db = filter.fit(point_cloud[inlier_mask])
+        cluster_mask = np.zeros_like(inlier_mask) > 0
+        cluster_mask[inlier_mask] = db.labels_ >= 0
+        inlier_mask = np.logical_and(inlier_mask, cluster_mask)
         inlier_points = point_cloud[inlier_mask]
         print(f"line {i}: {len(inlier_points)}")
         if len(inlier_points) < 50:
