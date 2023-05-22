@@ -23,5 +23,5 @@ def fit_line_ransac(points, max_iter=200, sigma=0.03):
             best_inlier_mask = inlier_mask
     inliers = points[best_inlier_mask]
     reg = LinearRegression().fit(inliers[:, :1], inliers[:, 1])
-    coef = [reg.coef_, reg.intercept_]
+    coef = [reg.coef_[0], reg.intercept_]
     return coef, best_inlier_mask
