@@ -5,7 +5,8 @@ from sklearn.cluster import DBSCAN
 import pickle
 
 from ransac import fit_line_ransac
-from nlos_sensing import transform, nlosFilterAndMapping
+from nlos_sensing import transform, nlosFilterAndMapping, line_symmetry_point
+from nlos_sensing import get_span, find_end_point
 
 
 local_sensing_range = [-1, 5, -3, 3]
@@ -13,8 +14,6 @@ min_points_inline = 50
 min_length_inline = 1
 ransac_sigma = 0.02
 ransac_iter = 200
-
-cluster = DBSCAN(eps=0.1, min_samples=5)
 filter = DBSCAN(eps=1, min_samples=20)
 
 fig, ax = plt.subplots(figsize=(16, 16))
@@ -25,8 +24,9 @@ def init_fig():
     ax.clear()
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
-    ax.set_xlim([-5, 5])
+    ax.set_xlim([-5, 10])
     ax.set_ylim([-5, 5])
+
 
 def gen_data():
     with open("/home/dingrong/Code/ackermann_car_nav/data/ransac_static_2023-05-21-20-29-07.pkl", 'rb') as f:
@@ -43,44 +43,7 @@ def gen_data():
         mmwave_pc[:, :2] = transform(mmwave_pc[:, :2], 0.17, 0, 60)
         yield t, laser_point_cloud, mmwave_pc
 
-def visualize_cluster(result):
-    init_fig()
-    t, laser_point_cloud, mmwave_point_cloud = result
-    # 聚类，对每一类进行ransac拟合直线
-    db = cluster.fit(laser_point_cloud)
-    labels = db.labels_
-    unique_labels = sorted(set(labels[labels >= 0]))
-    for label in unique_labels:
-        print(label, unique_labels)
-        laser_point_cloud = laser_point_cloud[label == labels]
-        if len(laser_point_cloud) < 10 or label > 7:
-            continue
-        coef, inlier_mask = fit_line_ransac(laser_point_cloud)
-        inlier_points = laser_point_cloud[inlier_mask]
-        ax.plot(inlier_points[:, 0], inlier_points[:, 1], color_panel[label], ms=2)
-    ax.set_title(f"Timestamp: {t:.2f}s")
 
-"""
-问题：如何提取墙面？
-- 假设点云大部分在墙面上，而且最多提取3条直线，那么提取3条点最多的线就行了
-
-问题：现在提取了3条线，但可能有1条是假的，怎么去除？
-- 跨度小
-- 点少
-
-问题：如何分辨出far wall, barrier wall, relay wall?
-- 如果有2条边，看看两条边的斜率是否相等
-    - 如果两条边平行，需要区分barrier wall和relay wall
-    - 如果两条边垂直，用前墙来映射——前墙的平均x值最大
-
-- 如果有3条边
-    - 区分far wall：
-        - 小车到far wall的距离比到barrier和relay wall的距离远
-        - 前墙的平均x值最大
-        - barrier 和 relay wall上的点非常多，是far wall的几倍，因为距离近，虽然墙短，但是点很多
-    - 又来了：怎么区分barrier wall和relay wall
-
-"""
 def visualize(result):
     init_fig()
     t, laser_point_cloud, mmwave_point_cloud = result
@@ -118,51 +81,31 @@ def visualize(result):
         coef2, inlier_points2 = fitted_lines[1]
         center2 = np.mean(inlier_points2, axis=0)
         diff = np.abs(coef1[0]-coef2[0])
-        print(f"diff: {diff}")
         if diff > 1:  # 两条线垂直，一个前墙，一个侧墙
             if center1[0] > center2[0]:  # 判断哪个是前墙
                 corner_args['far_wall'] = coef1
                 corner_args['barrier_wall'] = coef2
-                corner_args['barrier_corner'] = find_end_point(inlier_points2, 0)[1] # x值最大的
+                barrier_corner = find_end_point(inlier_points2, 0)[1]
+                corner_args['barrier_corner'] = np.array(barrier_corner) # x值最大的
             else:
                 corner_args['far_wall'] = coef2
                 corner_args['barrier_wall'] = coef1
-                corner_args['barrier_corner'] = find_end_point(inlier_points1, 0)[1] # x值最大的
-            ax.plot(*corner_args['barrier_corner'], color_panel[-3], ms=8)
-            ax.plot(0.08, 0, color_panel[-3], ms=8)
-            # 现在墙面信息已经有了，可以开始过滤和映射了
-    elif len(fitted_lines) == 3:
-        pass
-    else:
-        pass
+                barrier_corner = find_end_point(inlier_points1, 0)[1]
+                corner_args['barrier_corner'] = np.array(barrier_corner) # x值最大的
+            ax.plot(*barrier_corner, color_panel[-3], ms=8)
+            ax.plot(0, 0, color_panel[-3], ms=8)
 
-    # 过滤和映射
-    point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, [0, 0], corner_args)
-    
-
-
-def get_span(points):
-    span = 0
-    for ax in range(2):
-        min_p, max_p = find_end_point(points, axis=ax)
-        span = max(span, np.linalg.norm(max_p-min_p))
-    return span
-
-def find_end_point(points, axis=0):
-    max_v, min_v = -np.inf, np.inf
-    max_p, min_p = None, None
-    for p in points:
-        if p[axis] > max_v:
-            max_v = p[axis]
-            max_p = p
-        if p[axis] < min_v:
-            min_v = p[axis]
-            min_p = p
-    return min_p, max_p
+        # 过滤和映射
+        far_map_corner = line_symmetry_point(corner_args['far_wall'], corner_args['barrier_corner'])
+        far_map_radar = line_symmetry_point(corner_args['far_wall'], np.array([0, 0]))
+        ax.plot(*far_map_corner, color_panel[-3], ms=8)
+        ax.plot(*far_map_radar, color_panel[-3], ms=8)
+        point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0, 0]), corner_args)
+        ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[-3], ms=2)
 
 
 ani = animation.FuncAnimation(
-    fig, visualize, gen_data, interval=200,
+    fig, visualize, gen_data, interval=100,
     init_func=init_fig, repeat=False
 )
 # ani.save("plan1-2.gif", writer='imagemagick')
