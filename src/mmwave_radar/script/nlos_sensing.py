@@ -1,6 +1,14 @@
 import numpy as np
 
 
+def get_angle(points):
+    """(1, 0)正方向和点中心的夹角
+    """
+    center = np.mean(points, axis=0)
+    angle = np.arccos(center[0] / np.linalg.norm(center)) * 180 / np.pi
+    return angle
+
+
 def get_span(points):
     span = 0
     for ax in range(2):

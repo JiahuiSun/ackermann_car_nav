@@ -9,9 +9,9 @@ from nlos_sensing import transform, nlosFilterAndMapping, line_symmetry_point
 from nlos_sensing import get_span, find_end_point
 
 
-local_sensing_range = [-1, 5, -3, 3]
-min_points_inline = 50
-min_length_inline = 1
+local_sensing_range = [-0.5, 5, -3, 3]
+min_points_inline = 20
+min_length_inline = 0.6
 ransac_sigma = 0.02
 ransac_iter = 200
 filter = DBSCAN(eps=1, min_samples=20)
@@ -48,9 +48,12 @@ def visualize(result):
     init_fig()
     t, laser_point_cloud, mmwave_point_cloud = result
 
-    # 提取墙面，输出结果确保都是正确的墙面
+    # 提取墙面
     fitted_lines = []
     for i in range(3):
+        # 不用3条线就可以覆盖所有点
+        if len(laser_point_cloud) < min_points_inline:
+            break
         coef, inlier_mask = fit_line_ransac(laser_point_cloud, max_iter=ransac_iter, sigma=ransac_sigma)
         # 过滤墙面的直线上但不在线段上且明显是噪声的点
         db = filter.fit(laser_point_cloud[inlier_mask])
@@ -94,19 +97,19 @@ def visualize(result):
                 corner_args['barrier_corner'] = np.array(barrier_corner) # x值最大的
             ax.plot(*barrier_corner, color_panel[-3], ms=8)
             ax.plot(0, 0, color_panel[-3], ms=8)
-
-        # 过滤和映射
-        far_map_corner = line_symmetry_point(corner_args['far_wall'], corner_args['barrier_corner'])
-        far_map_radar = line_symmetry_point(corner_args['far_wall'], np.array([0, 0]))
-        ax.plot(*far_map_corner, color_panel[-3], ms=8)
-        ax.plot(*far_map_radar, color_panel[-3], ms=8)
-        point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0, 0]), corner_args)
-        ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[-3], ms=2)
+            # 过滤和映射
+            far_map_corner = line_symmetry_point(corner_args['far_wall'], corner_args['barrier_corner'])
+            far_map_radar = line_symmetry_point(corner_args['far_wall'], np.array([0, 0]))
+            ax.plot(*far_map_corner, color_panel[-3], ms=8)
+            ax.plot(*far_map_radar, color_panel[-3], ms=8)
+            point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0, 0]), corner_args)
+            ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[-3], ms=2)
 
 
 ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
-    init_func=init_fig, repeat=False
+    init_func=init_fig, repeat=True, save_count=200
 )
-# ani.save("plan1-2.gif", writer='imagemagick')
+writergif = animation.PillowWriter(fps=10)
+# ani.save("test2.gif", writer=writergif)
 plt.show()
