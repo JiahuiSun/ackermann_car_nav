@@ -37,12 +37,14 @@ angle_range_elevation = 15
 angle_res = 1
 angle_bins_azimuth = (angle_range_azimuth * 2) // angle_res + 1
 angle_bins_elevation = (angle_range_elevation * 2) // angle_res + 1
-bins_processed = 128
+bins_processed = max(128, num_samples)
 skip_size = 4
 range_res, bandwidth = dsp.range_resolution(num_samples, dig_out_sample_rate, freq_slop)
 doppler_res = dsp.doppler_resolution(bandwidth, start_freq, ramp_end_time, idle_time, num_chirps, num_tx)
 frame_bytes = num_samples * num_chirps * num_tx * num_rx * 2 * 2
-
+print("range resolution: ", range_res)
+print("doppler resolution: ", doppler_res)
+print("frame bytes: ", frame_bytes)
 pub = rospy.Publisher("mmwave_radar_point_cloud", PointCloud2, queue_size=10)
 
 

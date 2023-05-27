@@ -1,6 +1,6 @@
 <launch>
 	<arg name="dca_config" value="$(find mmwave_radar)/config/cf.json" doc="path to configuration file of DCA1000EVM" />
-	<arg name="xwr_config" value="$(find mmwave_radar)/config/xwr18xx.cfg" doc="path to configuration file of xWR1xxx" />
+	<arg name="xwr_config" value="$(find mmwave_radar)/config/best_range_res.cfg" doc="path to configuration file of xWR1xxx" />
 	<arg name="xwr_cli_port" value="/dev/ttyACM0" doc="xWR1xxx radar port" />
 	<arg name="frame_len" value="196608" doc="the number of bytes per frame" />
 
