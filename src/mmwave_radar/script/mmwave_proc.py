@@ -9,15 +9,29 @@ import mmwave.dsp as dsp
 import time
 from music import aoa_music_1D
 from mmwave.dsp.utils import Window
+import sys
 
-# TODO:
-num_chirps = 16
-num_samples = 256
+
+# 参数设置
+xwr_cfg = sys.argv[1]
+for line in open(xwr_cfg):
+    line = line.rstrip('\r\n')
+    if line.startswith('profileCfg'):
+        config = line.split(' ')
+        start_freq = float(config[2])
+        idle_time = float(config[3])
+        ramp_end_time = float(config[5])
+        freq_slop = float(config[8])
+        num_samples = int(config[10])
+        dig_out_sample_rate = float(config[11])
+    elif line.startswith('frameCfg'):
+        config = line.split(' ')
+        num_chirps = int(config[3])
+        frame_periodicity = float(config[5])
 num_rx = 4
 num_tx = 3
 virt_ant_azimuth = 8
 virt_ant_elevation = 2
-
 angle_range_azimuth = 90
 angle_range_elevation = 15
 angle_res = 1
@@ -25,10 +39,12 @@ angle_bins_azimuth = (angle_range_azimuth * 2) // angle_res + 1
 angle_bins_elevation = (angle_range_elevation * 2) // angle_res + 1
 bins_processed = 128
 skip_size = 4
-range_res = 0.044
-doppler_res = 0.13
+range_res, bandwidth = dsp.range_resolution(num_samples, dig_out_sample_rate, freq_slop)
+doppler_res = dsp.doppler_resolution(bandwidth, start_freq, ramp_end_time, idle_time, num_chirps, num_tx)
+frame_bytes = num_samples * num_chirps * num_tx * num_rx * 2 * 2
 
 pub = rospy.Publisher("mmwave_radar_point_cloud", PointCloud2, queue_size=10)
+
 
 def gen_point_cloud_plan2(adc_data):
     # 2. 整理数据格式 num_chirps, num_rx, num_samples
@@ -128,14 +144,14 @@ def gen_point_cloud_plan1(adc_data):
     thresholdDoppler, noiseFloorDoppler = np.apply_along_axis(func1d=dsp.ca_,
                                                                 axis=0,
                                                                 arr=fft2d_sum.T,
-                                                                l_bound=20,  # TODO: cfar参数
+                                                                l_bound=20,
                                                                 guard_len=2,
                                                                 noise_len=4)
     # 256x16
     thresholdRange, noiseFloorRange = np.apply_along_axis(func1d=dsp.ca_,
                                                             axis=0,
                                                             arr=fft2d_sum,
-                                                            l_bound=30,  # TODO: 
+                                                            l_bound=30, 
                                                             guard_len=4,
                                                             noise_len=16)
 
@@ -202,12 +218,9 @@ def gen_point_cloud_plan1(adc_data):
 
 
 def pub_point_cloud(adcData):
-    st1 = time.time()
     global pub
-    # TODO:
-    adc_pack = struct.pack(">196608b", *adcData.data)
+    adc_pack = struct.pack(f">{frame_bytes}b", *adcData.data)
     adc_unpack = np.frombuffer(adc_pack, dtype=np.int16)
-    st2 = time.time()
     x_pos, y_pos, z_pos, velocity = gen_point_cloud_plan1(adc_unpack)
     points = np.array([x_pos, y_pos, z_pos, velocity]).T
     msg = PointCloud2()
@@ -226,13 +239,8 @@ def pub_point_cloud(adcData):
     msg.is_dense = True
     msg.data = np.asarray(points, np.float32).tostring()
     pub.publish(msg)
-    st3 = time.time()
-    # print(f"parse data cost: {st2-st1}s")
-    # print(f"gen point cloud cost: {st3-st2}s")
-    # print(f"total cost: {st3-st1}s")
 
 
-if __name__ == "__main__":
-    rospy.init_node("mmwave_radar_subscriber")
-    sub = rospy.Subscriber("mmwave_radar_raw_data", adcData, pub_point_cloud, queue_size=10)
-    rospy.spin()
+rospy.init_node("mmwave_radar_subscriber")
+sub = rospy.Subscriber("mmwave_radar_raw_data", adcData, pub_point_cloud, queue_size=10)
+rospy.spin()
