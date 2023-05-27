@@ -7,7 +7,7 @@ import sys
 if __name__ == "__main__":
     serial_port_CLI = sys.argv[1]
     xwr_cfg = sys.argv[2]
-    # wait for DCA first
+    # wait for DCA configuration
     time.sleep(5)
     CLIport = serial.Serial(serial_port_CLI, 115200, timeout=1)
     if CLIport.is_open:
