@@ -1,8 +1,8 @@
 <launch>
-	<arg name="dca_config" value="$(find mmwave_radar)/config/cf.json" doc="path to configuration file of DCA1000EVM" />
-	<arg name="xwr_config" value="$(find mmwave_radar)/config/best_range_res.cfg" doc="path to configuration file of xWR1xxx" />
-	<arg name="xwr_cli_port" value="/dev/ttyACM0" doc="xWR1xxx radar port" />
-	<arg name="frame_len" value="196608" doc="the number of bytes per frame" />
+	<arg name="dca_config" default="$(find mmwave_radar)/config/cf.json" doc="path to configuration file of DCA1000EVM" />
+	<arg name="xwr_config" default="$(find mmwave_radar)/config/best_range_res.cfg" doc="path to configuration file of xWR1xxx" />
+	<arg name="xwr_cli_port" default="/dev/ttyACM0" doc="xWR1xxx radar port" />
+	<arg name="frame_len" default="196608" doc="the number of bytes per frame" />
 
 	<!-- 启动生成毫米波点云节点 -->
 	<node pkg="mmwave_radar" type="mmwave_proc.py" name="mmwave_proc" args="$(arg xwr_config)" output="screen" /> 
