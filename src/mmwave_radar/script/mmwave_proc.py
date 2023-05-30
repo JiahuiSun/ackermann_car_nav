@@ -123,7 +123,8 @@ def gen_point_cloud_plan2(adc_data):
     # 8. generate point cloud
     x_pos = -ranges * np.sin(azimuths)
     y_pos = ranges * np.cos(azimuths)
-    return x_pos, y_pos, dopplers
+    z_pos = np.zeros_like(ranges)
+    return x_pos, y_pos, z_pos, dopplers, snrs
 
 
 def gen_point_cloud_plan1(adc_data):
@@ -212,19 +213,20 @@ def gen_point_cloud_plan1(adc_data):
     ranges = detObj2D['rangeIdx'] * range_res
     detObj2D['dopplerIdx'][detObj2D['dopplerIdx'] >= num_chirps/2] -= num_chirps
     dopplers = detObj2D['dopplerIdx'] * doppler_res
+    snrs = detObj2D['SNR']
 
     x_pos = -ranges * np.sin(azimuths) * np.cos(elevations)
     y_pos = ranges * np.cos(azimuths) * np.cos(elevations)
     z_pos = ranges * np.sin(elevations)
-    return x_pos, y_pos, z_pos, dopplers
+    return x_pos, y_pos, z_pos, dopplers, snrs
 
 
 def pub_point_cloud(adcData):
     global pub
     adc_pack = struct.pack(f">{frame_bytes}b", *adcData.data)
     adc_unpack = np.frombuffer(adc_pack, dtype=np.int16)
-    x_pos, y_pos, z_pos, velocity = gen_point_cloud_plan1(adc_unpack)
-    points = np.array([x_pos, y_pos, z_pos, velocity]).T
+    x_pos, y_pos, z_pos, velocity, snr = gen_point_cloud_plan1(adc_unpack)
+    points = np.array([x_pos, y_pos, z_pos, velocity, snr]).T
     msg = PointCloud2()
     msg.header = adcData.header
     msg.height = 1
@@ -233,10 +235,11 @@ def pub_point_cloud(adcData):
         PointField('x', 0, PointField.FLOAT32, 1),
         PointField('y', 4, PointField.FLOAT32, 1),
         PointField('z', 8, PointField.FLOAT32, 1),
-        PointField('vel', 12, PointField.FLOAT32, 1)
+        PointField('vel', 12, PointField.FLOAT32, 1),
+        PointField('snr', 16, PointField.FLOAT32, 1)
     ]
     msg.is_bigendian = False
-    msg.point_step = 16
+    msg.point_step = 20
     msg.row_step = msg.point_step * points.shape[0]
     msg.is_dense = True
     msg.data = np.asarray(points, np.float32).tostring()
