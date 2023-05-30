@@ -99,10 +99,10 @@ def visualize(result):
             ax.plot(0, 0, color_panel[-3], ms=8)
             # 过滤和映射
             far_map_corner = line_symmetry_point(corner_args['far_wall'], corner_args['barrier_corner'])
-            far_map_radar = line_symmetry_point(corner_args['far_wall'], np.array([0, 0]))
+            far_map_radar = line_symmetry_point(corner_args['far_wall'], np.array([0.17, 0]))
             ax.plot(*far_map_corner, color_panel[-3], ms=8)
             ax.plot(*far_map_radar, color_panel[-3], ms=8)
-            point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0, 0]), corner_args)
+            point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0.17, 0]), corner_args)
             ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[-3], ms=2)
 
 

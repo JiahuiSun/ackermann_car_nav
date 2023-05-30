@@ -30,23 +30,80 @@ def find_end_point(points, axis=0):
     return min_p, max_p
 
 
-def line_by_2p(p1, p2):
-    """A ray from p1 to p2.
+def line_by_coef_p(coef, p):
     """
-    ABC = np.array([p2[1]-p1[1], p1[0]-p2[0], p2[0]*p1[1]-p1[0]*p2[1]])
-    if p1[1] > p2[1]:
-        ABC = -ABC
-    return ABC
+    Args:
+        coef: [k, b]
+        p: [x, y]
+    
+    Returns:
+        coef_: [k_, b_], k_ = k, b_ = y - k * x
+    """
+    return np.array([coef[0], p[1]-coef[0]*p[0]])
+
+
+def line_by_2p(p1, p2):
+    """
+    Args:
+        p1: [x1, y1]
+        p2: [x2, y2]
+    
+    Returns:
+        coef: [k, b], y = kx + b
+                k = (y2 - y1) / (x2 - x1)
+                b = (x2*y1 - x1*y2) / (x2 - x1)
+    """
+    return np.array([(p2[1]-p1[1])/(p2[0]-p1[0]), (p2[0]*p1[1]-p1[0]*p2[1])/(p2[0]-p1[0])])
+
+
+def intersection_of_2line(coef1, coef2):
+    """
+    Args:
+        coef1: [k1, b1]
+        coef2: [k2, b2]
+
+    Returns:
+        point: [x, y], x = (b2 - b1) / (k1 - k2), y = k1 * x + b1
+    """
+    x = (coef2[1] - coef1[1]) / (coef1[0] - coef2[0])
+    y = coef1[0] * x + coef1[1]
+    return np.array([x, y])
+
+
+def isin_triangle(p1, p2, p3, points):
+    """判断点集points是否在p1, p2, p3形成的三角形内。
+    先让p1、p2、p3按逆时针排序，则三角形内部的点在p2-p1, p3-p2, p1-p3向量的左边，再通过叉乘判断。
+
+    Args:
+        p1: [x1, y1], shape=(2,)
+        p2: [x2, y2]
+        p3: [x3, y3]
+        points (ndarry): shape=(N, 2)
+
+    Returns:
+        mask: 1 if p in triangle, 0, otherwise.
+    """
+    # 先让p1, p2, p3逆时针排序
+    if np.cross(p2-p1, p3-p1) < 0:
+        p3, p2 = p2, p3
+    # 向量叉乘判断点在向量的左边
+    mask1 = np.cross(p2-p1, points-p1) > 0
+    mask2 = np.cross(p3-p2, points-p2) > 0
+    mask3 = np.cross(p1-p3, points-p3) > 0
+    mask = np.logical_and(mask1, np.logical_and(mask2, mask3))
+    return mask
 
 
 def line_symmetry_point(coef, point):
     """
     Args:
-        coef: y = kx + b, coef = [k, b]
+        coef: [k, b], y = kx + b
         point (ndarry): shape=(2,) or (N, 2)
     
     Returns:
         point_sym (ndarry): shape=(2,) or (N, 2)
+                            x2 = x1 - 2 * k * (k * x1 - y1 + b) / (k^2 + 1)
+                            y2 = y1 + 2 * (k * x1 - y1 + b) / (k^2 + 1)
     """
     if len(point.shape) < 2:
         x2 = point[0] - 2 * coef[0] * (coef[0] * point[0] - point[1] + coef[1]) / (coef[0]**2 + 1)
@@ -58,34 +115,23 @@ def line_symmetry_point(coef, point):
         return np.array([x2, y2]).T
 
 
-def nlosFilterAndMapping(pointCloud, radar_pos, corner_args):
+def nlosFilterAndMapping(point_cloud, radar_pos, corner_args):
     """TODO: 现在只实现了1种转角
     """
-    point_cloud_ext = np.concatenate([pointCloud[:, :2], np.ones((pointCloud.shape[0], 1))], axis=1)
     far_wall = corner_args['far_wall']
     barrier_wall = corner_args['barrier_wall']
     barrier_corner = corner_args['barrier_corner']
 
     # Filter
     far_map_corner = line_symmetry_point(far_wall, barrier_corner)
-    far_map_radar = line_symmetry_point(far_wall, radar_pos)
-    # 用前墙反射
-    # 如果转角在雷达左边
-    if barrier_corner[1] > 0:
-        left_border = line_by_2p(radar_pos, barrier_corner)
-        right_border = line_by_2p(far_map_radar, far_map_corner)
-    # 如果转角在雷达右边
-    elif barrier_corner[1] < 0:
-        left_border = line_by_2p(far_map_radar, far_map_corner)
-        right_border = line_by_2p(radar_pos, barrier_corner)
-    else:
-        raise Exception("Wrong input!")
-    flag1 = point_cloud_ext.dot(left_border) > 0
-    flag2 = point_cloud_ext.dot(right_border) > 0
-    flag = np.logical_and(flag1, flag2)
+    radar_corner_line = line_by_2p(radar_pos, barrier_corner)
+    inter1 = intersection_of_2line(far_wall, radar_corner_line)
+    far_map_radar_corner_line = line_by_coef_p(far_wall, far_map_corner)
+    inter2 = intersection_of_2line(far_map_radar_corner_line, radar_corner_line)
+    flag = isin_triangle(far_map_corner, inter2, inter1, point_cloud[:, :2])
 
     # Mapping
-    point_cloud_filter = pointCloud[flag]
+    point_cloud_filter = point_cloud[flag]
     point_cloud_filter[:, :2] = line_symmetry_point(far_wall, point_cloud_filter[:, :2])
     return point_cloud_filter
 

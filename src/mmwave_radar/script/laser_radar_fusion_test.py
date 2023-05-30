@@ -11,7 +11,26 @@ from nlos_sensing import transform, nlosFilterAndMapping, line_symmetry_point
 from nlos_sensing import get_span, find_end_point
 
 
-local_sensing_range = [-2, -1, 0.7, 0.88]
+"""
+需求分析：
+- 把小车上的激光雷达点云、毫米波雷达点云同步到标定雷达下
+- 这需要获得小车相对标定雷达的位姿
+- 如果小车是静止的，可以手动从一帧点云中获取，可如果小车是运动的，怎么从每一帧点云中提取小车啊？
+- 人也是运动的啊，你怎么提取人的位置？难道就真的要一帧一帧，手动提取人的位置？
+
+- 打开标定激光雷达的一帧
+    - 画图看看人和车的点云
+    - 从点云中提取人的点云，人的位置是点云均值
+    - 从点云中提取车的特征点，根据特征点换算出坐标系变换关系——这个是最关键的，如果这个可以做到，实际上我就可以
+- 打开小车激光雷达的一帧
+    - 把墙面挑出来，拟合直线
+- 打开毫米波雷达的一帧
+    - NLoS过滤和映射
+    - 把人的位置换算到标定雷达坐标系下
+- 计算定位误差
+"""
+
+local_sensing_range = [-5, 3, -5, 5]
 min_points_inline = 20
 min_length_inline = 0.6
 ransac_sigma = 0.02
@@ -32,8 +51,8 @@ def init_fig():
 
 def gen_data():
     for topic, msg, t in rosbag.Bag(
-        "/home/dingrong/Code/ackermann_car_nav/test_2023-05-28-17-51-22.bag", 'r'):
-        if topic == '/laser_point_cloud':
+        "/home/dingrong/Code/ackermann_car_nav/data/20230530/walk_param1_2023-05-30-16-58-37.bag", 'r'):
+        if topic == '/laser_point_cloud2':
             points = point_cloud2.read_points_list(
                 msg, field_names=['x', 'y']
             )
