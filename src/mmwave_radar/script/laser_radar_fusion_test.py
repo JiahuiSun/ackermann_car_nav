@@ -20,17 +20,18 @@ from nlos_sensing import get_span, find_end_point
 
 - 打开标定激光雷达的一帧
     - 画图看看人和车的点云
-    - 从点云中提取人的点云，人的位置是点云均值
-    - 从点云中提取车的特征点，根据特征点换算出坐标系变换关系——这个是最关键的，如果这个可以做到，实际上我就可以
+    - 从点云中提取人的点云
+    - 从点云中提取车的特征点，根据特征点换算出坐标系变换关系
 - 打开小车激光雷达的一帧
     - 把墙面挑出来，拟合直线
 - 打开毫米波雷达的一帧
-    - NLoS过滤和映射
-    - 把人的位置换算到标定雷达坐标系下
+    - 基于墙面直线，NLoS过滤和映射，提取人的点云
 - 计算定位误差
+    - 把毫米波点云变换到标定雷达坐标系
 """
 
-local_sensing_range = [-5, 3, -5, 5]
+local_sensing_range = [-2, 0, -2.9, -2]
+# local_sensing_range = [-8, 2, 0, 1.5]
 min_points_inline = 20
 min_length_inline = 0.6
 ransac_sigma = 0.02
@@ -51,7 +52,7 @@ def init_fig():
 
 def gen_data():
     for topic, msg, t in rosbag.Bag(
-        "/home/dingrong/Code/ackermann_car_nav/data/20230530/walk_param1_2023-05-30-16-58-37.bag", 'r'):
+        "/home/dingrong/Code/ackermann_car_nav/data/20230530/floor31_h1_180_L_120_angle_0_param1_2023-05-30-16-03-36.bag", 'r'):
         if topic == '/laser_point_cloud2':
             points = point_cloud2.read_points_list(
                 msg, field_names=['x', 'y']
