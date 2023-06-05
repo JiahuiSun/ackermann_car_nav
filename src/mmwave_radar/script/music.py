@@ -61,9 +61,13 @@ def aoa_music_1D(steering_vec, rx_chirps, num_sources):
     if num_antennas < num_sources:
         raise ValueError("number of sources shoule not exceed number ")
     
+    # 8 x 8
     R = cov_matrix(rx_chirps)
+    # 8 x 7
     noise_subspace = _noise_subspace(R, num_sources)
+    # 7 x 181
     v = noise_subspace.T.conj() @ steering_vec.T
+    # 181
     spectrum = np.reciprocal(np.sum(v * v.conj(), axis=0).real)
 
     return spectrum

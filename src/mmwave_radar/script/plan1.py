@@ -104,7 +104,7 @@ def visualize(adc_data):
     # detObj2D = dsp.range_based_pruning(detObj2D, SNRThresholds2, peakValThresholds2, num_samples, 0.5, range_res)
 
     # 6. MUSIC aoa
-    # num_obj x 8
+    # 8 x num_obj
     azimuthInput = aoa_input[detObj2D['rangeIdx'], :8, detObj2D['dopplerIdx']].T
     elevationInput = np.concatenate([
         aoa_input[detObj2D['rangeIdx'], 2:3, detObj2D['dopplerIdx']],
