@@ -72,6 +72,37 @@ def aoa_music_1D(steering_vec, rx_chirps, num_sources):
 
     return spectrum
 
+def aoa_music_1D_mat(steering_vec, rx_chirps):
+    """Implmentation of 1D MUltiple SIgnal Classification (MUSIC) algorithm on ULA (Uniformed Linear Array). 
+    
+    Current implementation assumes covariance matrix is not rank deficient and ULA spacing is half of the wavelength.
+    .. math::
+        P_{} (\\theta) = \\frac{1}{a^{H}(\\theta) \mathbf{E}_\mathrm{n}\mathbf{E}_\mathrm{n}^H a(\\theta)}
+    where :math:`E_{n}` is the noise subpace and :math:`a` is the steering vector.
+    
+
+    Args:
+        steering_vec (~np.ndarray): steering vector with the shape of (FoV/angel_resolution, num_ant). 
+         FoV/angel_resolution is usually 181. It is generated from gen_steering_vec() function.
+        rx_chirps (~np.ndarray): Ouput of the 1D range FFT. The shape is (num_obj, num_ant, num_chirps_per_frame).
+        num_sources (int): Number of sources in the scene. Needs to be smaller than num_ant for ULA.
+    
+    Returns:
+        (~np.ndarray): the spectrum of the MUSIC. Objects should be holes for the equation and thus sharp peaks.
+    """
+    # N x M x 8 x 1 * N x M x 1 x 8 -> N x 8 x 8
+    covariance = np.matmul(rx_chirps, np.conjugate(rx_chirps).transpose(0, 2, 1))
+    # N x 8 x 7
+    _, v = LA.eigh(covariance) 
+    noise_subspace = v[:, :, :-1]
+    # 1 x 181 x 8
+    steering_vec = steering_vec[np.newaxis]
+    # N x 181 x 7
+    v = np.matmul(steering_vec, noise_subspace.conj())
+    # N x 181
+    spectrum = np.reciprocal(np.sum(v * v.conj(), axis=2).real)
+    return spectrum
+
 def aoa_root_music_1D(steering_vec, rx_chirps, num_sources):
     """Implmentation of 1D root MUSIC algorithm on ULA (Uniformed Linear Array). 
     

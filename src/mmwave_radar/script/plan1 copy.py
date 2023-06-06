@@ -14,7 +14,7 @@ num_tx = 3
 virt_ant_azimuth = 8
 virt_ant_elevation = 2
 
-angle_range_azimuth = 90
+angle_range_azimuth = 60
 angle_range_elevation = 15
 angle_res = 1
 angle_bins_azimuth = (angle_range_azimuth * 2) // angle_res + 1
@@ -107,29 +107,12 @@ def visualize(adc_data):
     # detObj2D = dsp.range_based_pruning(detObj2D, SNRThresholds2, peakValThresholds2, num_samples, 0.5, range_res)
 
     # 6. MUSIC aoa
-    # 8 x num_obj
-    azimuthInput = aoa_input[detObj2D['rangeIdx'], :8, detObj2D['dopplerIdx']].T
-    elevationInput = np.concatenate([
-        aoa_input[detObj2D['rangeIdx'], 2:3, detObj2D['dopplerIdx']],
-        aoa_input[detObj2D['rangeIdx'], 8:9, detObj2D['dopplerIdx']]
-    ], axis=1).T
-    azimuths = np.zeros(detObj2D.shape[0])
-    elevations = np.zeros(detObj2D.shape[0])
-    
+    # 100 x 16 x vtx
+    azimuthInput = aoa_input[30:130, :8, :].transpose(0, 2, 1)
     _, steering_vec_azimuth = dsp.gen_steering_vec(angle_range_azimuth, angle_res, virt_ant_azimuth)
-    for i in range(detObj2D.shape[0]):
-        spectrum = aoa_music_1D(steering_vec_azimuth, azimuthInput[:, i:i+1], 1)
-        azimuths[i] = np.argmax(spectrum)
-    # spectrum = aoa_music_1D_mat(steering_vec_azimuth, azimuthInput.T[:, :, np.newaxis])
-    # azimuths = np.argmax(spectrum, axis=1)
+    spectrum = aoa_music_1D_mat(steering_vec_azimuth, azimuthInput[..., np.newaxis])
+    azimuths = np.argmax(spectrum, axis=1)
 
-    _, steering_vec_elevation = dsp.gen_steering_vec(angle_range_elevation, angle_res, virt_ant_elevation)
-    for i in range(detObj2D.shape[0]):
-        spectrum = aoa_music_1D(steering_vec_elevation, elevationInput[:, i:i+1], 1)
-        elevations[i] = np.argmax(spectrum)
-    # spectrum = aoa_music_1D_mat(steering_vec_elevation, elevationInput.T[:, :, np.newaxis])
-    # elevations = np.argmax(spectrum, axis=1)
-    
     # convert bins to units 
     azimuths = (azimuths - (angle_bins_azimuth // 2)) * (np.pi / 180)
     elevations = (elevations - (angle_bins_elevation // 2)) * (np.pi / 180)
