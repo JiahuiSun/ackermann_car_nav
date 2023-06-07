@@ -90,17 +90,17 @@ def aoa_music_1D_mat(steering_vec, rx_chirps):
     Returns:
         (~np.ndarray): the spectrum of the MUSIC. Objects should be holes for the equation and thus sharp peaks.
     """
-    # N x M x 8 x 1 * N x M x 1 x 8 -> N x 8 x 8
-    covariance = np.matmul(rx_chirps, np.conjugate(rx_chirps).transpose(0, 2, 1))
-    # N x 8 x 7
+    # N x M x 8 x 1 * N x M x 1 x 8 -> N x M x 8 x 8
+    covariance = np.matmul(rx_chirps, np.conjugate(rx_chirps).transpose(0, 1, 3, 2))
+    # N x M x 8 x 7
     _, v = LA.eigh(covariance) 
-    noise_subspace = v[:, :, :-1]
-    # 1 x 181 x 8
-    steering_vec = steering_vec[np.newaxis]
-    # N x 181 x 7
+    noise_subspace = v[..., :-1]
+    # 1 x 1 x 181 x 8
+    steering_vec = steering_vec[np.newaxis][np.newaxis]
+    # N x M x 181 x 7
     v = np.matmul(steering_vec, noise_subspace.conj())
-    # N x 181
-    spectrum = np.reciprocal(np.sum(v * v.conj(), axis=2).real)
+    # N x M x 181
+    spectrum = np.reciprocal(np.sum(v * v.conj(), axis=-1).real)
     return spectrum
 
 def aoa_root_music_1D(steering_vec, rx_chirps, num_sources):
