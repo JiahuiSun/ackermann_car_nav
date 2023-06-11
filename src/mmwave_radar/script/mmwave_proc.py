@@ -7,7 +7,7 @@ import numpy as np
 import struct
 import mmwave.dsp as dsp
 import time
-from music import aoa_music_1D
+from utils.music import aoa_music_1D
 from mmwave.dsp.utils import Window
 import sys
 
