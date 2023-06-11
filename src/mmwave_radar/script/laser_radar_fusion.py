@@ -4,9 +4,8 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 import pickle
 
-from ransac import fit_line_ransac
 from nlos_sensing import transform, nlosFilterAndMapping, line_symmetry_point
-from nlos_sensing import get_span, find_end_point
+from nlos_sensing import get_span, find_end_point, fit_line_ransac
 
 
 local_sensing_range = [-0.5, 5, -3, 3]

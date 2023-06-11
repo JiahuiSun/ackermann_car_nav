@@ -5,8 +5,7 @@ import rosbag
 from sensor_msgs import point_cloud2
 from sklearn.cluster import DBSCAN
 
-from ransac import fit_line_ransac
-from nlos_sensing import transform
+from nlos_sensing import transform, fit_line_ransac
 
 
 cluster = DBSCAN(eps=0.1, min_samples=5)
