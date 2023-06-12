@@ -43,6 +43,18 @@ def line_by_coef_p(coef, p):
     return np.array([coef[0], p[1]-coef[0]*p[0]])
 
 
+def line_by_vertical_coef_p(coef, p):
+    """
+    Args:
+        coef: [k, b]
+        p: [x, y]
+    
+    Returns:
+        coef_: [k_, b_], k_ = -1/k, b_ = y - k_ * x
+    """
+    return np.array([-1/coef[0], p[1]+1/coef[0]*p[0]])
+
+
 def line_by_2p(p1, p2):
     """
     Args:
@@ -151,6 +163,16 @@ def transform(radar_xy, delta_x, delta_y, yaw):
     translation_vector = np.array([[delta_x, delta_y]])
     world_xy = radar_xy.dot(rotation_matrix) + translation_vector
     return world_xy
+
+
+def transform_line(coef, delta_x, delta_y, yaw):
+    two_p = np.array([
+        [0, coef[1]],
+        [1, coef[0]+coef[1]]
+    ])
+    two_p_ = transform(two_p, delta_x, delta_y, yaw)
+    coef_ = line_by_2p(two_p_[0], two_p_[1])
+    return coef_
 
 
 def fit_line_ransac(points, max_iter=200, sigma=0.03):

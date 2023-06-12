@@ -6,9 +6,8 @@ import pickle
 import rosbag
 from sensor_msgs import point_cloud2
 
-from ransac import fit_line_ransac
 from nlos_sensing import transform, nlosFilterAndMapping, line_symmetry_point
-from nlos_sensing import get_span, find_end_point
+from nlos_sensing import get_span, find_end_point, fit_line_ransac
 
 
 """
@@ -30,8 +29,8 @@ from nlos_sensing import get_span, find_end_point
     - 把毫米波点云变换到标定雷达坐标系
 """
 
-local_sensing_range = [-2, 0, -2.9, -2]
-# local_sensing_range = [-8, 2, 0, 1.5]
+# local_sensing_range = [-2, 0, -2.9, -2]
+local_sensing_range = [-8, 2, 0, 1.5]
 min_points_inline = 20
 min_length_inline = 0.6
 ransac_sigma = 0.02
@@ -79,7 +78,7 @@ def visualize(result):
 
 ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
-    init_func=init_fig, repeat=False, save_count=200
+    init_func=init_fig, repeat=True, save_count=200
 )
 writergif = animation.PillowWriter(fps=10)
 # ani.save("test2.gif", writer=writergif)
