@@ -7,13 +7,12 @@ rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
 from sklearn.cluster import DBSCAN
 import pickle
 
-from ransac import fit_line_ransac
 from nlos_sensing import transform, nlosFilterAndMapping, line_symmetry_point
-from nlos_sensing import get_span, find_end_point
+from nlos_sensing import get_span, find_end_point, fit_line_ransac
 
 
 local_sensing_range = [-0.5, 5, -3, 3]
-gt_range = [-8, 2, 0, 1.5]  # 切割人
+gt_range = [-8, 2, 0, 1.5]  # 切割人的点云
 min_points_inline = 20
 min_length_inline = 0.6
 ransac_sigma = 0.02
@@ -30,20 +29,21 @@ def init_fig():
     ax.clear()
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
-    ax.set_xlim([-6, 2])
+    ax.set_xlim([-7, 2])
     ax.set_ylim([-4, 4])
     ax.tick_params(direction='in')
 
 
 file_path = "/home/dingrong/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_180_angle_30_param2_2023-05-30-16-45-05"
 fwrite = open(f"{file_path}.txt", 'w')
+save_gif = False
 def gen_data():
     with open(f"{file_path}.pkl", 'rb') as f:
         all_point_cloud = pickle.load(f)
     for t, laser_pc, laser_pc2, mmwave_pc, trans in all_point_cloud:
         # 从激光雷达坐标系到小车坐标系
         laser_point_cloud = transform(laser_pc, 0.08, 0, 180)
-        # 过滤，去掉以距离小车中心5米以外的点
+        # 过滤激光雷达点云，去掉距离小车中心5米以外的点
         flag_x = np.logical_and(laser_point_cloud[:, 0]>=local_sensing_range[0], laser_point_cloud[:, 0]<=local_sensing_range[1])
         flag_y = np.logical_and(laser_point_cloud[:, 1]>=local_sensing_range[2], laser_point_cloud[:, 1]<=local_sensing_range[3])
         flag = np.logical_and(flag_x, flag_y) 
@@ -71,7 +71,7 @@ def visualize(result):
         if len(laser_point_cloud) < min_points_inline:
             break
         coef, inlier_mask = fit_line_ransac(laser_point_cloud, max_iter=ransac_iter, sigma=ransac_sigma)
-        # 过滤墙面的直线上但不在线段上且明显是噪声的点
+        # 过滤在墙面的直线上但明显是噪声的点
         db = filter.fit(laser_point_cloud[inlier_mask])
         cluster_mask = np.zeros_like(inlier_mask) > 0
         cluster_mask[inlier_mask] = db.labels_ >= 0  # 即使前墙是2段的也保留
@@ -84,12 +84,9 @@ def visualize(result):
         # 跨度太小
         if get_span(inlier_points) < min_length_inline:
             continue
-        # ax.plot(inlier_points[:, 0], inlier_points[:, 1], color_panel[i], ms=2)
         outlier_mask = np.logical_not(inlier_mask)
         laser_point_cloud = laser_point_cloud[outlier_mask]
         fitted_lines.append([coef, inlier_points])
-    # ax.plot(laser_point_cloud[:, 0], laser_point_cloud[:, 1], color_panel[-1], ms=2)
-    # ax.plot(mmwave_point_cloud[:, 0], mmwave_point_cloud[:, 1], color_panel[-2], ms=2)
     ax.set_title(f"Timestamp: {t:.2f}s")
 
     # 区分墙面
@@ -113,17 +110,18 @@ def visualize(result):
                 corner_args['barrier_corner'] = np.array(barrier_corner) # x值最大的
             # 过滤和映射
             point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0.17, 0]), corner_args)
-            # ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[-3], ms=2)
 
             # 把毫米波雷达、激光雷达点云变换到标定坐标系下
             point_cloud_nlos[:, :2] = transform(point_cloud_nlos[:, :2], inter[0], inter[1], 360-theta)
             mmwave_point_cloud[:, :2] = transform(mmwave_point_cloud[:, :2], inter[0], inter[1], 360-theta)
             inlier_points1 = transform(inlier_points1, inter[0], inter[1], 360-theta)
             inlier_points2 = transform(inlier_points2, inter[0], inter[1], 360-theta)
+            # laser_point_cloud = transform(laser_point_cloud, inter[0], inter[1], 360-theta)
             ax.plot(inlier_points1[:, 0], inlier_points1[:, 1], color_panel[0], ms=2)
             ax.plot(inlier_points2[:, 0], inlier_points2[:, 1], color_panel[1], ms=2)
             ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[-3], ms=2)
             ax.plot(mmwave_point_cloud[:, 0], mmwave_point_cloud[:, 1], color_panel[-2], ms=2)
+            # ax.plot(laser_point_cloud[:, 0], laser_point_cloud[:, 1], color_panel[-1], ms=2)
             ax.plot(laser_point_cloud2[:, 0], laser_point_cloud2[:, 1], color_panel[-1], ms=2)
             # 统计精度
             if len(point_cloud_nlos) > 1 and len(laser_point_cloud2) > 0:
@@ -139,10 +137,11 @@ def visualize(result):
 
 ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
-    init_func=init_fig, repeat=False, save_count=200
+    init_func=init_fig, repeat=True, save_count=200
 )
 writergif = animation.PillowWriter(fps=10)
-ani.save(f"{file_path}.gif", writer=writergif)
+if save_gif:
+    ani.save(f"{file_path}.gif", writer=writergif)
 plt.show()
 accuracy = np.stack(accuracy)
 fwrite.write(f"avg acc: {np.mean(accuracy, axis=0)}")

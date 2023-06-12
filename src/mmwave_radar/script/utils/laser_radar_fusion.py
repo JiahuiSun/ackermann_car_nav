@@ -33,7 +33,7 @@ def gen_data():
     for t, laser_pc, mmwave_pc in all_point_cloud:
         # 从激光雷达坐标系到小车坐标系
         laser_point_cloud = transform(laser_pc, 0.08, 0, 180)
-        # 过滤，去掉以距离小车中心5米以外的点
+        # 过滤激光雷达点云，去掉距离小车中心5米以外的点
         flag_x = np.logical_and(laser_point_cloud[:, 0]>=local_sensing_range[0], laser_point_cloud[:, 0]<=local_sensing_range[1])
         flag_y = np.logical_and(laser_point_cloud[:, 1]>=local_sensing_range[2], laser_point_cloud[:, 1]<=local_sensing_range[3])
         flag = np.logical_and(flag_x, flag_y) 
@@ -54,7 +54,7 @@ def visualize(result):
         if len(laser_point_cloud) < min_points_inline:
             break
         coef, inlier_mask = fit_line_ransac(laser_point_cloud, max_iter=ransac_iter, sigma=ransac_sigma)
-        # 过滤墙面的直线上但不在线段上且明显是噪声的点
+        # 过滤在墙面的直线上但明显是噪声的点
         db = filter.fit(laser_point_cloud[inlier_mask])
         cluster_mask = np.zeros_like(inlier_mask) > 0
         cluster_mask[inlier_mask] = db.labels_ >= 0  # 即使前墙是2段的也保留
@@ -95,7 +95,7 @@ def visualize(result):
                 barrier_corner = find_end_point(inlier_points1, 0)[1]
                 corner_args['barrier_corner'] = np.array(barrier_corner) # x值最大的
             ax.plot(*barrier_corner, color_panel[-3], ms=8)
-            ax.plot(0, 0, color_panel[-3], ms=8)
+            ax.plot(0.17, 0, color_panel[-3], ms=8)
             # 过滤和映射
             far_map_corner = line_symmetry_point(corner_args['far_wall'], corner_args['barrier_corner'])
             far_map_radar = line_symmetry_point(corner_args['far_wall'], np.array([0.17, 0]))
