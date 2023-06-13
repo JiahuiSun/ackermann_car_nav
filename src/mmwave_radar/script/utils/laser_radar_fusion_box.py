@@ -34,7 +34,7 @@ def init_fig():
     ax.tick_params(direction='in')
 
 
-file_path = "/home/dingrong/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_180_angle_30_param2_2023-05-30-16-45-05"
+file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_180_angle_30_param2_2023-05-30-16-45-05"
 fwrite = open(f"{file_path}.txt", 'w')
 save_gif = False
 def gen_data():

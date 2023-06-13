@@ -128,12 +128,27 @@ def line_symmetry_point(coef, point):
         return np.array([x2, y2]).T
 
 
-def bounding_box(laser_point_cloud, wall_coef, inter=None, theta=None):
+def point2line_distance(coef, point):
+    """点到直线的距离
+    """
+    return np.abs(coef[0]*point[0]-point[1]+coef[1]) / np.sqrt(1+coef[0]**2)
+
+
+def parallel_line_distance(coef, dist):
+    """平行于给定直线，并且距离为dist
+    """
+    t0 = coef[1] + dist * np.sqrt(1 + coef[0]**2)
+    t1 = coef[1] - dist * np.sqrt(1 + coef[0]**2)
+    return [coef[0], t0], [coef[0], t1]
+
+
+def bounding_box(laser_point_cloud, wall_coef, inter=None, theta=None, delta_x=0.10, delta_y=0.05):
     """给定一堆点，一条表示方向的线，找平行于该线的最小外接矩形
     Args:
         laser_point_cloud: Nx2, 点云
         wall_coef: bounding box边的方向
         inter, theta: 可能要对wall_coef进行坐标系转换
+        delta_x, delta_y: 生成box时留一些safe region
     
     Returns:
         key_points: 中心点和四个顶点的坐标
@@ -152,6 +167,17 @@ def bounding_box(laser_point_cloud, wall_coef, inter=None, theta=None):
     # 找到了两个x方向的极值点
     max_x_vertical_line = line_by_coef_p(center_vertical_wall, laser_point_cloud[max_idx])
     min_x_vertical_line = line_by_coef_p(center_vertical_wall, laser_point_cloud[min_idx])
+    # 平行直线，并且距离直线15cm，距离中心更远的直线
+    coef1, coef2 = parallel_line_distance(max_x_vertical_line, delta_x)
+    if point2line_distance(coef1, box_center) > point2line_distance(coef2, box_center):
+        max_x_vertical_line = coef1
+    else:
+        max_x_vertical_line = coef2
+    coef1, coef2 = parallel_line_distance(min_x_vertical_line, delta_x)
+    if point2line_distance(coef1, box_center) > point2line_distance(coef2, box_center):
+        min_x_vertical_line = coef1
+    else:
+        min_x_vertical_line = coef2
 
     vecA = np.array([(box_center[1]+1-center_vertical_wall[1])/center_vertical_wall[0]-box_center[0], 1])
     proj = vecB.dot(vecA) / np.linalg.norm(vecA)
@@ -160,6 +186,17 @@ def bounding_box(laser_point_cloud, wall_coef, inter=None, theta=None):
     # 找到2个y方向的极值点
     max_y_parallel_line = line_by_coef_p(center_parallel_wall, laser_point_cloud[max_idx])
     min_y_parallel_line = line_by_coef_p(center_parallel_wall, laser_point_cloud[min_idx])
+    # 平行直线，并且距离直线15cm，距离中心更远的直线
+    coef1, coef2 = parallel_line_distance(max_y_parallel_line, delta_y)
+    if point2line_distance(coef1, box_center) > point2line_distance(coef2, box_center):
+        max_y_parallel_line = coef1
+    else:
+        max_y_parallel_line = coef2
+    coef1, coef2 = parallel_line_distance(min_y_parallel_line, delta_y)
+    if point2line_distance(coef1, box_center) > point2line_distance(coef2, box_center):
+        min_y_parallel_line = coef1
+    else:
+        min_y_parallel_line = coef2
 
     top_right = intersection_of_2line(max_x_vertical_line, max_y_parallel_line)
     top_left = intersection_of_2line(min_x_vertical_line, max_y_parallel_line)
