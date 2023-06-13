@@ -128,6 +128,48 @@ def line_symmetry_point(coef, point):
         return np.array([x2, y2]).T
 
 
+def bounding_box(laser_point_cloud, wall_coef, inter=None, theta=None):
+    """给定一堆点，一条表示方向的线，找平行于该线的最小外接矩形
+    Args:
+        laser_point_cloud: Nx2, 点云
+        wall_coef: bounding box边的方向
+        inter, theta: 可能要对wall_coef进行坐标系转换
+    
+    Returns:
+        key_points: 中心点和四个顶点的坐标
+        box_length, box_width: bounding box边长
+    """
+    box_center = np.mean(laser_point_cloud, axis=0)
+    vecB = laser_point_cloud - box_center
+    center_wall_coef = transform_line(wall_coef, inter[0], inter[1], theta) if inter is not None else wall_coef
+    center_parallel_wall = line_by_coef_p(center_wall_coef, box_center)
+    center_vertical_wall = line_by_vertical_coef_p(center_wall_coef, box_center)
+
+    vecA = np.array([1, center_parallel_wall[0]*(box_center[0]+1)+center_parallel_wall[1]-box_center[1]])
+    proj = vecB.dot(vecA) / np.linalg.norm(vecA)
+    max_idx, min_idx = np.argmax(proj), np.argmin(proj)
+    box_length = proj[max_idx] - proj[min_idx]
+    # 找到了两个x方向的极值点
+    max_x_vertical_line = line_by_coef_p(center_vertical_wall, laser_point_cloud[max_idx])
+    min_x_vertical_line = line_by_coef_p(center_vertical_wall, laser_point_cloud[min_idx])
+
+    vecA = np.array([(box_center[1]+1-center_vertical_wall[1])/center_vertical_wall[0]-box_center[0], 1])
+    proj = vecB.dot(vecA) / np.linalg.norm(vecA)
+    max_idx, min_idx = np.argmax(proj), np.argmin(proj)
+    box_width = proj[max_idx] - proj[min_idx]
+    # 找到2个y方向的极值点
+    max_y_parallel_line = line_by_coef_p(center_parallel_wall, laser_point_cloud[max_idx])
+    min_y_parallel_line = line_by_coef_p(center_parallel_wall, laser_point_cloud[min_idx])
+
+    top_right = intersection_of_2line(max_x_vertical_line, max_y_parallel_line)
+    top_left = intersection_of_2line(min_x_vertical_line, max_y_parallel_line)
+    bottom_left = intersection_of_2line(min_x_vertical_line, min_y_parallel_line)
+    bottom_right = intersection_of_2line(max_x_vertical_line, min_y_parallel_line)
+    box_center = (top_right + bottom_left) / 2
+
+    return (box_center, top_right, bottom_right, bottom_left, top_left), box_length, box_width
+
+
 def nlosFilterAndMapping(point_cloud, radar_pos, corner_args):
     """TODO: 现在只实现了1种转角
     """
@@ -151,18 +193,36 @@ def nlosFilterAndMapping(point_cloud, radar_pos, corner_args):
 
 def transform(radar_xy, delta_x, delta_y, yaw):
     """Transform xy from radar coordinate to the world coordinate.
-    Inputs:
+    Args:
         radar_xy: Nx2，雷达坐标系下的点云
         delta_x, delta_y: 雷达在世界坐标系中的坐标
         yaw: 雷达坐标系逆时针旋转yaw度与世界坐标系重合
-    Return:
-        world_xy: Nx2
+
+    Returns:
+        world_xy: Nx2，雷达坐标系下的点云转换到世界坐标系下
     """
     yaw = yaw * np.pi / 180
     rotation_matrix = np.array([[np.cos(yaw), -np.sin(yaw)], [np.sin(yaw), np.cos(yaw)]])
     translation_vector = np.array([[delta_x, delta_y]])
     world_xy = radar_xy.dot(rotation_matrix) + translation_vector
     return world_xy
+
+
+def transform_inverse(world_xy, delta_x, delta_y, yaw):
+    """Transform xy from radar coordinate to the world coordinate.
+    Args:
+        world_xy: Nx2，世界坐标系下的点云
+        delta_x, delta_y: 雷达在世界坐标系中的坐标
+        yaw: 雷达坐标系逆时针旋转yaw度与世界坐标系重合
+
+    Returns:
+        radar_xy: Nx2，世界坐标系下的点云转换到雷达坐标系下
+    """
+    yaw = yaw * np.pi / 180
+    rotation_matrix = np.array([[np.cos(yaw), np.sin(yaw)], [-np.sin(yaw), np.cos(yaw)]])
+    translation_vector = np.array([[delta_x, delta_y]])
+    radar_xy = (world_xy - translation_vector).dot(rotation_matrix)
+    return radar_xy
 
 
 def transform_line(coef, delta_x, delta_y, yaw):

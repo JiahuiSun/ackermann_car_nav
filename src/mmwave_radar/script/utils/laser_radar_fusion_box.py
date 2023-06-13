@@ -1,15 +1,14 @@
 import numpy as np
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from matplotlib import rcParams
 rcParams['font.family'] = 'serif'
 rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
 from sklearn.cluster import DBSCAN
 import pickle
 
-from nlos_sensing import transform, nlosFilterAndMapping, line_by_coef_p, line_by_vertical_coef_p
-from nlos_sensing import get_span, find_end_point, fit_line_ransac, transform_line
+from nlos_sensing import transform, nlosFilterAndMapping, bounding_box
+from nlos_sensing import get_span, find_end_point, fit_line_ransac
 
 
 local_sensing_range = [-0.5, 5, -3, 3]
@@ -117,7 +116,7 @@ def visualize(result):
             mmwave_point_cloud[:, :2] = transform(mmwave_point_cloud[:, :2], inter[0], inter[1], 360-theta)
             inlier_points1 = transform(inlier_points1, inter[0], inter[1], 360-theta)
             inlier_points2 = transform(inlier_points2, inter[0], inter[1], 360-theta)
-            laser_point_cloud = transform(laser_point_cloud, inter[0], inter[1], 360-theta)
+            # laser_point_cloud = transform(laser_point_cloud, inter[0], inter[1], 360-theta)
 
             ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[-3], ms=2)
             ax.plot(mmwave_point_cloud[:, 0], mmwave_point_cloud[:, 1], color_panel[-2], ms=2)
@@ -136,36 +135,17 @@ def visualize(result):
                     fwrite.write(f"{t} {-pred[0]} {-gt[0]} {mae}\n")
                     print(t, -pred[0], -gt[0], mae)
 
-        # 打box
+        # 打bounding box
         if len(laser_point_cloud2) > 0:
-            box_center = np.mean(laser_point_cloud2, axis=0)
-            vecB = laser_point_cloud2 - box_center
-            center_wall_coef = transform_line(corner_args['far_wall'], inter[0], inter[1], 360-theta)
+            key_points, box_length, box_width = bounding_box(laser_point_cloud2, corner_args['far_wall'], inter, 360-theta)
+            box_center, top_right, bottom_right, bottom_left, top_left = key_points
 
-            center_parallel_wall = line_by_coef_p(center_wall_coef, box_center)
-            vecA = np.array([1, center_parallel_wall[0]*(box_center[0]+1)+center_parallel_wall[1]-box_center[1]])
-            proj = vecB.dot(vecA) / np.linalg.norm(vecA)
-            max_idx, min_idx = np.argmax(proj), np.argmin(proj)
-            box_length = proj[max_idx] - proj[min_idx]
-            max_x, min_x = laser_point_cloud2[max_idx, 0], laser_point_cloud2[min_idx, 0]
-
-            center_vertical_wall = line_by_vertical_coef_p(center_wall_coef, box_center)
-            vecA = np.array([(box_center[1]+1-center_vertical_wall[1])/center_vertical_wall[0]-box_center[0], 1])
-            proj = vecB.dot(vecA) / np.linalg.norm(vecA)
-            max_idx, min_idx = np.argmax(proj), np.argmin(proj)
-            box_width = proj[max_idx] - proj[min_idx]
-            max_y, min_y = laser_point_cloud2[max_idx, 1], laser_point_cloud2[min_idx, 1]
-            
-            top_right = np.array([max_x, max_y])
-            bottom_left = np.array([min_x, min_y])
-            box_center = (top_right + bottom_left) / 2
+            x = [top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]
+            y = [top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]
+            ax.plot(x, y, 'k-', lw=1)
             ax.plot(*box_center, color_panel[0], ms=2)
             ax.plot(*top_right, color_panel[1], ms=2)
             ax.plot(*bottom_left, color_panel[2], ms=2)
-
-            # 画出box
-            rect = patches.Rectangle(bottom_left, box_length, box_width, linewidth=1, edgecolor='r', facecolor='none')
-            ax.add_patch(rect)
 
 
 ani = animation.FuncAnimation(
