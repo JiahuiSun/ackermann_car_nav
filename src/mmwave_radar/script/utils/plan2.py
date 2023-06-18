@@ -2,8 +2,8 @@ import numpy as np
 import mmwave.dsp as dsp
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-# from mmwave.tracking import EKF
 from mmwave.dsp.utils import Window
+import time
 
 
 num_chirps = 16
@@ -27,8 +27,6 @@ line0, = ax.plot([], [], 'ob', ms=2)
 line1, = ax.plot([], [], 'or', ms=2)
 lines = [line0, line1]
 
-# tracker = EKF()
-
 
 def init_fig():
     ax.set_xlabel('x(m)')
@@ -43,9 +41,9 @@ def gen_data():
         # 1. 订阅数据，读取参数
         data_path = f"/home/dingrong/Code/ackermann_car_nav/data/person_walk/test_{cnt+1}.bin"
         adc_data = np.fromfile(data_path, dtype=np.int16)
-        yield adc_data
+        yield adc_data, cnt
 
-def visualize(adc_data):
+def gen_point_cloud_plan2(adc_data):
     # global tracker
     # 2. 整理数据格式 num_chirps, num_rx, num_samples
     # adc_data 48 x 4 x 256
@@ -123,26 +121,26 @@ def visualize(adc_data):
     azimuths = (azimuths - (angle_bins // 2)) * (np.pi / 180)
     dopplers = dopplerEst * doppler_res
 
-    # --- put into EKF
-    # tracker.update_point_cloud(ranges, azimuths, dopplers, snrs)
-    # targetDescr, tNum = tracker.step()
-    # x_pos_list, y_pos_list = [], []
-    # for target in targetDescr:
-    #     x_pos, y_pos, x_vel, y_vel = target.S[:4]
-    #     vec_mag = np.sqrt(x_vel ** 2 + y_vel ** 2)
-    #     if vec_mag < 0.2:
-    #         continue
-    #     x_pos_list.append(-x_pos)
-    #     y_pos_list.append(y_pos)
-    # lines[0].set_data(x_pos_list, y_pos_list)
-    # lines[1].set_data(x_pos, y_pos)
-
     x_pos = -ranges * np.sin(azimuths)
     y_pos = ranges * np.cos(azimuths)
-    static_idx = dopplers == 0
-    dynamic_idx = dopplers != 0
-    lines[0].set_data(x_pos[static_idx], y_pos[static_idx])
-    lines[1].set_data(x_pos[dynamic_idx], y_pos[dynamic_idx])
+    z_pos = np.zeros_like(ranges)
+    return x_pos, y_pos, z_pos, dopplers, snrs
+
+def visualize(result):
+    adc_data, seq = result
+    st = time.time()
+    point_cloud = gen_point_cloud_plan2(adc_data)
+    end = time.time()
+    print(f"{end-st:.3f}s")
+    if point_cloud is not None:
+        x_pos, y_pos, z_pos, dopplers, snrs = point_cloud
+        point_cloud = np.array([x_pos, y_pos]).T
+        # point_cloud = transform(point_cloud, 0.17, 0, 60)
+        static_idx = dopplers == 0
+        dynamic_idx = dopplers != 0
+        ax.set_title(f"frame id: {seq}")
+        lines[0].set_data(point_cloud[static_idx, 0], point_cloud[static_idx, 1])
+        lines[1].set_data(point_cloud[dynamic_idx, 0], point_cloud[dynamic_idx, 1])
 
 
 ani = animation.FuncAnimation(

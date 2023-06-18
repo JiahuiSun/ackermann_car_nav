@@ -31,12 +31,12 @@ num_rx = 4
 num_tx = 3
 virt_ant_azimuth = 8
 virt_ant_elevation = 2
-angle_range_azimuth = 60
+angle_range_azimuth = 90
 angle_range_elevation = 15
 angle_res = 1
 angle_bins_azimuth = (angle_range_azimuth * 2) // angle_res + 1
 angle_bins_elevation = (angle_range_elevation * 2) // angle_res + 1
-begin_range, end_range = 32, 128  # 1.4-5.6
+begin_range, end_range = 0, 191  # 1.4-5.6
 range_res, bandwidth = dsp.range_resolution(num_samples, dig_out_sample_rate, freq_slop)
 doppler_res = dsp.doppler_resolution(bandwidth, start_freq, ramp_end_time, idle_time, num_chirps, num_tx)
 frame_bytes = num_samples * num_chirps * num_tx * num_rx * 2 * 2
@@ -73,6 +73,7 @@ def gen_data():
             yield adc_data, cnt
 
 def gen_point_cloud_plan3(adc_data):
+    st = time.time()
     # 2. 整理数据格式 Tx*num_chirps, num_rx, num_samples
     # adc_data 48 x 4 x 256
     ret = np.zeros(len(adc_data) // 2, dtype=complex)
@@ -82,17 +83,17 @@ def gen_point_cloud_plan3(adc_data):
 
     # 3. range fft, 48 x 4 x 256
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
-
+    st2 = time.time()
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
-
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=True, window_type_2d=Window.HAMMING)
+    st3 = time.time()
     # 5. MUSIC aoa
     # 100 x 16 x 8
     azimuthInput = aoa_input[begin_range:end_range+1, :8, :].transpose(0, 2, 1)
     _, steering_vec_azimuth = dsp.gen_steering_vec(angle_range_azimuth, angle_res, virt_ant_azimuth)
     # 100 x 16 x 181
     spectrum = aoa_music_1D_mat(steering_vec_azimuth, azimuthInput[..., np.newaxis])
-    
+    st4 = time.time()
     # 6. RA CFAR
     # 100 x 181
     RA = np.mean(spectrum, axis=1)
@@ -126,7 +127,8 @@ def gen_point_cloud_plan3(adc_data):
 
     # doppler estimation
     dopplers = np.argmax(spectrum[ranges, :, azimuths], axis=1)
-
+    end = time.time()
+    print(f"rangeFFT cost: {st2-st:.3f} dopplerFFT cost: {st3-st2:.3f} music cost: {st4-st3:.3f} total: {end-st:.3f}")
     # convert bins to units 
     azimuths = (azimuths - (angle_bins_azimuth // 2)) * (np.pi / 180)
     ranges = (ranges + begin_range) * range_res
@@ -141,14 +143,11 @@ def gen_point_cloud_plan3(adc_data):
 
 def visualize(result):
     adc_data, seq = result
-    st = time.time()
     point_cloud = gen_point_cloud_plan3(adc_data)
-    end = time.time()
-    print(f"{end-st:.3f}s")
     if point_cloud is not None:
         x_pos, y_pos, z_pos, dopplers, snrs = point_cloud
         point_cloud = np.array([x_pos, y_pos]).T
-        point_cloud = transform(point_cloud, 0.17, 0, 60)
+        # point_cloud = transform(point_cloud, 0.17, 0, 60)
         static_idx = dopplers == 0
         dynamic_idx = dopplers != 0
         ax.set_title(f"frame id: {seq}")
@@ -157,7 +156,7 @@ def visualize(result):
 
 
 ani = animation.FuncAnimation(
-    fig, visualize, gen_data, interval=100,
+    fig, visualize, gen_data, interval=200,
     init_func=init_fig, repeat=True, save_count=100
 )
 # ani.save("plan1.gif", writer='imagemagick')

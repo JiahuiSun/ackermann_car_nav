@@ -34,13 +34,13 @@ def init_fig():
     ax.tick_params(direction='in')
 
 
-file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_180_angle_30_param2_2023-05-30-16-45-05"
+file_path = "/home/dingrong/Code/ackermann_car_nav/data/20230613/software3_beichen_2023-06-13-16-49-17"
 fwrite = open(f"{file_path}.txt", 'w')
 save_gif = False
 def gen_data():
     with open(f"{file_path}.pkl", 'rb') as f:
         all_point_cloud = pickle.load(f)
-    for t, laser_pc, laser_pc2, mmwave_pc, trans in all_point_cloud:
+    for t, laser_pc, laser_pc2, mmwave_pc, mmwave_raw_data, trans in all_point_cloud:
         # 从激光雷达坐标系到小车坐标系
         laser_point_cloud = transform(laser_pc, 0.08, 0, 180)
         # 过滤激光雷达点云，去掉距离小车中心5米以外的点
@@ -149,8 +149,8 @@ def visualize(result):
 
 
 ani = animation.FuncAnimation(
-    fig, visualize, gen_data, interval=200,
-    init_func=init_fig, repeat=True, save_count=200
+    fig, visualize, gen_data, interval=100,
+    init_func=init_fig, repeat=False, save_count=500
 )
 writergif = animation.PillowWriter(fps=10)
 if save_gif:
