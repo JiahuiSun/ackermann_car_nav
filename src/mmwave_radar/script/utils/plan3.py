@@ -85,7 +85,7 @@ def gen_point_cloud_plan3(adc_data):
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
     st2 = time.time()
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=True, window_type_2d=Window.HAMMING)
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
     st3 = time.time()
     # 5. MUSIC aoa
     # 100 x 16 x 8
@@ -126,7 +126,17 @@ def gen_point_cloud_plan3(adc_data):
     snrs = heatmap_log[ranges, azimuths] - noise_floor[ranges, azimuths]
 
     # doppler estimation
-    dopplers = np.argmax(spectrum[ranges, :, azimuths], axis=1)
+    # dopplers = np.argmax(spectrum[ranges, :, azimuths], axis=1)
+    doppler_mat = spectrum[ranges, :, azimuths]
+    thresholdDoppler, noiseFloorDoppler = np.apply_along_axis(func1d=dsp.ca_,
+                                                                axis=0,
+                                                                arr=doppler_mat.T,
+                                                                l_bound=1,
+                                                                guard_len=2,
+                                                                noise_len=4)
+    doppler_mask = doppler_mat > thresholdDoppler.T
+    dopplers = np.sum(doppler_mask, axis=1)
+    dopplers[dopplers > 0] = np.argmax(doppler_mat[dopplers > 0], axis=1)
     end = time.time()
     print(f"rangeFFT cost: {st2-st:.3f} dopplerFFT cost: {st3-st2:.3f} music cost: {st4-st3:.3f} total: {end-st:.3f}")
     # convert bins to units 
