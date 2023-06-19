@@ -11,7 +11,7 @@ import rosbag
 
 
 # 读取参数
-is_bag = 0
+is_bag = 1
 is_save = 0
 bag_file = "/home/dingrong/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.bag"
 xwr_cfg = "/home/dingrong/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
@@ -77,7 +77,6 @@ def gen_data():
             yield adc_data, cnt
 
 def gen_point_cloud_plan3(adc_data):
-    st = time.time()
     # 2. 整理数据格式 Tx*num_chirps, num_rx, num_samples
     # adc_data 48 x 4 x 256
     ret = np.zeros(len(adc_data) // 2, dtype=complex)
@@ -87,31 +86,27 @@ def gen_point_cloud_plan3(adc_data):
 
     # 3. range fft, 48 x 4 x 256
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
-    st2 = time.time()
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
-    st3 = time.time()
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=num_tx, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
     # 5. MUSIC aoa
     # 100 x 16 x 8
     azimuthInput = aoa_input[begin_range:end_range+1, :8, :].transpose(0, 2, 1)
     _, steering_vec_azimuth = dsp.gen_steering_vec(angle_range_azimuth, angle_res, virt_ant_azimuth)
     # 100 x 16 x 181
     spectrum = aoa_music_1D_mat(steering_vec_azimuth, azimuthInput[..., np.newaxis])
-    st4 = time.time()
     # 6. RA CFAR
     # 100 x 181
     RA = np.mean(spectrum, axis=1)
     RA_log = np.log2(RA)
+
     # RA 可视化
     axis_range = np.arange(num_samples) * range_res
     axis_azimuth = np.arange(angle_bins_azimuth) * np.pi / 180
     ax2.imshow(RA, extent=[axis_azimuth.min(), axis_azimuth.max(), axis_range.max(), axis_range.min()])
-
     # RD 可视化
     RD = np.mean(spectrum, axis=2)
-    RD_log = np.log2(RD)
     axis_doppler = (np.arange(num_chirps) - (num_chirps // 2)) * doppler_res
-    ax3.imshow(RD_log, extent=[axis_doppler.min(), axis_doppler.max(), axis_range.max(), axis_range.min()])
+    ax3.imshow(RD, extent=[axis_doppler.min(), axis_doppler.max(), axis_range.max(), axis_range.min()])
 
     # --- cfar in azimuth direction
     first_pass, _ = np.apply_along_axis(func1d=dsp.ca_,
@@ -139,10 +134,8 @@ def gen_point_cloud_plan3(adc_data):
     ranges, azimuths = pairs[:, 0], pairs[:, 1]
     snrs = RA_log[ranges, azimuths] - noise_floor[ranges, azimuths]
 
-    # doppler estimation
+    # 7. doppler estimation
     dopplers = np.argmax(spectrum[ranges, :, azimuths], axis=1)
-    end = time.time()
-    print(f"rangeFFT cost: {st2-st:.3f} dopplerFFT cost: {st3-st2:.3f} music cost: {st4-st3:.3f} total: {end-st:.3f}")
 
     # convert bins to units 
     azimuths = azimuths * angle_res * np.pi / 180
