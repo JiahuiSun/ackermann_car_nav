@@ -82,7 +82,7 @@ def gen_data():
         # 标定激光雷达->小车坐标系->毫米波雷达坐标系
         laser_point_cloud2 = transform_inverse(laser_point_cloud2, inter[0], inter[1], 360-theta)
         laser_point_cloud2 = transform_inverse(laser_point_cloud2, 0.17, 0, 90)
-        yield t, laser_point_cloud2, RA_cart, mmwave_point_cloud
+        yield t, laser_point_cloud2, RA_cart, mmwave_point_cloud, mmwave_pc
 
 
 def gen_point_cloud_plan3(adc_data):
@@ -96,7 +96,7 @@ def gen_point_cloud_plan3(adc_data):
     # 3. range fft, 48 x 4 x 256
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=num_tx, clutter_removal_enabled=True, window_type_2d=Window.HAMMING)
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=num_tx, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
     # 5. MUSIC aoa
     # 100 x 16 x 8
     azimuthInput = aoa_input[begin_range:end_range+1, :8, :].transpose(0, 2, 1)
@@ -173,14 +173,17 @@ def gen_point_cloud_plan3(adc_data):
 
 def visualize(result):
     init_fig()
-    t, laser_point_cloud2, RA_cart, mmwave_point_cloud = result
+    t, laser_point_cloud2, RA_cart, mmwave_point_cloud, mmwave_pc = result
 
     ax.set_title(f"Timestamp: {t:.2f}s")
     ax.plot(laser_point_cloud2[:, 0], laser_point_cloud2[:, 1], color_panel[-3], ms=2)
+
     static_idx = np.abs(mmwave_point_cloud[:, 2]) <= doppler_res
     dynamic_idx = np.abs(mmwave_point_cloud[:, 2]) > doppler_res
     ax.plot(mmwave_point_cloud[static_idx, 0], mmwave_point_cloud[static_idx, 1], 'ob', ms=2)
     ax.plot(mmwave_point_cloud[dynamic_idx, 0], mmwave_point_cloud[dynamic_idx, 1], 'or', ms=2)
+    
+    ax.plot(mmwave_pc[:, 0], mmwave_pc[:, 1], color_panel[-2], ms=2)
 
 
 ani = animation.FuncAnimation(
