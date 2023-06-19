@@ -8,6 +8,7 @@ from nlos_sensing import transform
 import time
 import struct
 import rosbag
+import pandas as pd
 
 
 # 读取参数
@@ -46,14 +47,14 @@ print("range resolution: ", range_res)
 print("doppler resolution: ", doppler_res)
 print("frame bytes: ", frame_bytes)
 
-fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(20, 8))
+fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(24, 8))
 
 def init_fig():
     ax1.clear()
     ax1.set_xlabel('x(m)')
     ax1.set_ylabel('y(m)')
-    ax1.set_xlim([-5, 10])
-    ax1.set_ylim([-5, 10])
+    ax1.set_xlim([-5, 5])
+    ax1.set_ylim([0, 10])
     ax2.clear()
     ax2.set_xlabel('Azimuth')
     ax2.set_ylabel('Range')
@@ -62,6 +63,9 @@ def init_fig():
     ax3.set_xlabel('Doppler')
     ax3.set_ylabel('Range')
     ax3.set_title('RD heat map')
+    ax4.clear()
+    ax4.set_xlabel('x(m)')
+    ax4.set_ylabel('y(m)')
 
 def gen_data():
     if is_bag:
@@ -133,6 +137,25 @@ def gen_point_cloud_plan3(adc_data):
         return None
     ranges, azimuths = pairs[:, 0], pairs[:, 1]
     snrs = RA_log[ranges, azimuths] - noise_floor[ranges, azimuths]
+
+    # RD转化到笛卡尔坐标系下可视化
+    W = end_range + 1
+    axis_range = np.arange(W).reshape(-1, 1) * range_res
+    axis_azimuth = np.arange(angle_bins_azimuth).reshape(1, -1) * np.pi / 180
+    xs_idx = axis_range * np.cos(axis_azimuth) // range_res
+    ys_idx = axis_range * np.sin(axis_azimuth) // range_res
+    df = pd.DataFrame({
+        'x_idx': xs_idx.flatten().astype(np.int),
+        'y_idx': ys_idx.flatten().astype(np.int),
+        'rcs': RA.flatten()
+    })
+    df_group = df.groupby(['x_idx', 'y_idx'], as_index=False).mean()
+    xs_idx2 = (df_group.x_idx + W).to_numpy()
+    ys_idx2 = df_group.y_idx.to_numpy()
+    rcs = df_group.rcs.to_numpy()
+    bbox = np.ones((W, W*2)) * rcs.min()
+    bbox[ys_idx2, xs_idx2] = rcs
+    ax4.imshow(bbox)
 
     # 7. doppler estimation
     dopplers = np.argmax(spectrum[ranges, :, azimuths], axis=1)
