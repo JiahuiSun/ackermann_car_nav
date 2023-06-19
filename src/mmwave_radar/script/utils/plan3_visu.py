@@ -155,8 +155,8 @@ def visualize(result):
         x_pos, y_pos, z_pos, dopplers, snrs = point_cloud
         point_cloud = np.array([x_pos, y_pos]).T
         # point_cloud = transform(point_cloud, 0.17, 0, 60)
-        static_idx = np.abs(dopplers) < 0.13
-        dynamic_idx = np.abs(dopplers) >= 0.13
+        static_idx = np.abs(dopplers) <= doppler_res
+        dynamic_idx = np.abs(dopplers) > doppler_res
         ax1.set_title(f"frame id: {seq}")
         ax1.plot(point_cloud[static_idx, 0], point_cloud[static_idx, 1], 'ob', ms=2)
         ax1.plot(point_cloud[dynamic_idx, 0], point_cloud[dynamic_idx, 1], 'or', ms=2)

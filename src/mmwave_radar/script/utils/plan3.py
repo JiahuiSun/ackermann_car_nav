@@ -45,16 +45,13 @@ print("doppler resolution: ", doppler_res)
 print("frame bytes: ", frame_bytes)
 
 fig, ax = plt.subplots(figsize=(8, 8))
-line0, = ax.plot([], [], 'ob', ms=2)
-line1, = ax.plot([], [], 'or', ms=2)
-lines = [line0, line1]
 
 def init_fig():
+    ax.clear()
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
     ax.set_xlim([-5, 10])
     ax.set_ylim([-5, 10])
-    return lines
 
 def gen_data():
     # 读取原始数据
@@ -73,7 +70,6 @@ def gen_data():
             yield adc_data, cnt
 
 def gen_point_cloud_plan3(adc_data):
-    st = time.time()
     # 2. 整理数据格式 Tx*num_chirps, num_rx, num_samples
     # adc_data 48 x 4 x 256
     ret = np.zeros(len(adc_data) // 2, dtype=complex)
@@ -83,26 +79,23 @@ def gen_point_cloud_plan3(adc_data):
 
     # 3. range fft, 48 x 4 x 256
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
-    st2 = time.time()
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
-    st3 = time.time()
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=num_tx, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
     # 5. MUSIC aoa
     # 100 x 16 x 8
     azimuthInput = aoa_input[begin_range:end_range+1, :8, :].transpose(0, 2, 1)
     _, steering_vec_azimuth = dsp.gen_steering_vec(angle_range_azimuth, angle_res, virt_ant_azimuth)
     # 100 x 16 x 181
     spectrum = aoa_music_1D_mat(steering_vec_azimuth, azimuthInput[..., np.newaxis])
-    st4 = time.time()
     # 6. RA CFAR
     # 100 x 181
     RA = np.mean(spectrum, axis=1)
-    heatmap_log = np.log2(RA)
+    RA_log = np.log2(RA)
 
     # --- cfar in azimuth direction
     first_pass, _ = np.apply_along_axis(func1d=dsp.ca_,
                                         axis=0,
-                                        arr=heatmap_log.T,
+                                        arr=RA_log.T,
                                         l_bound=1,
                                         guard_len=4,
                                         noise_len=16)
@@ -110,59 +103,48 @@ def gen_point_cloud_plan3(adc_data):
     # --- cfar in range direction
     second_pass, noise_floor = np.apply_along_axis(func1d=dsp.ca_,
                                                 axis=0,
-                                                arr=heatmap_log,
+                                                arr=RA_log,
                                                 l_bound=1,
                                                 guard_len=4,
                                                 noise_len=16)
 
     # --- classify peaks and caclulate snrs
-    first_pass = (heatmap_log > first_pass.T)
-    second_pass = (heatmap_log > second_pass)
+    first_pass = (RA_log > first_pass.T)
+    second_pass = (RA_log > second_pass)
     peaks = (first_pass & second_pass)
     pairs = np.argwhere(peaks)
     if len(pairs) < 1:
         return None
     ranges, azimuths = pairs[:, 0], pairs[:, 1]
-    snrs = heatmap_log[ranges, azimuths] - noise_floor[ranges, azimuths]
+    snrs = RA_log[ranges, azimuths] - noise_floor[ranges, azimuths]
 
-    # doppler estimation
-    # dopplers = np.argmax(spectrum[ranges, :, azimuths], axis=1)
-    doppler_mat = spectrum[ranges, :, azimuths]
-    thresholdDoppler, noiseFloorDoppler = np.apply_along_axis(func1d=dsp.ca_,
-                                                                axis=0,
-                                                                arr=doppler_mat.T,
-                                                                l_bound=1,
-                                                                guard_len=2,
-                                                                noise_len=4)
-    doppler_mask = doppler_mat > thresholdDoppler.T
-    dopplers = np.sum(doppler_mask, axis=1)
-    dopplers[dopplers > 0] = np.argmax(doppler_mat[dopplers > 0], axis=1)
-    end = time.time()
-    print(f"rangeFFT cost: {st2-st:.3f} dopplerFFT cost: {st3-st2:.3f} music cost: {st4-st3:.3f} total: {end-st:.3f}")
+    # 7. doppler estimation
+    dopplers = np.argmax(spectrum[ranges, :, azimuths], axis=1)
+
     # convert bins to units 
-    azimuths = (azimuths - (angle_bins_azimuth // 2)) * (np.pi / 180)
+    azimuths = azimuths * angle_res * np.pi / 180
     ranges = (ranges + begin_range) * range_res
-    dopplers[dopplers >= num_chirps/2] -= num_chirps
-    dopplers = dopplers * doppler_res
+    dopplers = (dopplers - num_chirps // 2) * doppler_res
 
-    x_pos = -ranges * np.sin(azimuths)
-    y_pos = ranges * np.cos(azimuths)
+    x_pos = ranges * np.cos(azimuths)
+    y_pos = ranges * np.sin(azimuths)
     z_pos = np.zeros_like(ranges)
     return x_pos, y_pos, z_pos, dopplers, snrs
 
 
 def visualize(result):
+    init_fig()
     adc_data, seq = result
     point_cloud = gen_point_cloud_plan3(adc_data)
     if point_cloud is not None:
         x_pos, y_pos, z_pos, dopplers, snrs = point_cloud
         point_cloud = np.array([x_pos, y_pos]).T
         # point_cloud = transform(point_cloud, 0.17, 0, 60)
-        static_idx = dopplers == 0
-        dynamic_idx = dopplers != 0
+        static_idx = np.abs(dopplers) <= doppler_res
+        dynamic_idx = np.abs(dopplers) > doppler_res
         ax.set_title(f"frame id: {seq}")
-        lines[0].set_data(point_cloud[static_idx, 0], point_cloud[static_idx, 1])
-        lines[1].set_data(point_cloud[dynamic_idx, 0], point_cloud[dynamic_idx, 1])
+        ax.plot(point_cloud[static_idx, 0], point_cloud[static_idx, 1], 'ob', ms=2)
+        ax.plot(point_cloud[dynamic_idx, 0], point_cloud[dynamic_idx, 1], 'or', ms=2)
 
 
 ani = animation.FuncAnimation(
