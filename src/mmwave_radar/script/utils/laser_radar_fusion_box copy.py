@@ -1,20 +1,21 @@
 import numpy as np
-import mmwave.dsp as dsp
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
+from matplotlib import rcParams
+rcParams['font.family'] = 'serif'
+rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
+from sklearn.cluster import DBSCAN
+import mmwave.dsp as dsp
+import pickle
 from mmwave.dsp.utils import Window
 from music import aoa_music_1D, aoa_music_1D_mat
-from nlos_sensing import transform
-import time
-import struct
-import rosbag
 import pandas as pd
 
+from nlos_sensing import transform, nlosFilterAndMapping, bounding_box
+from nlos_sensing import get_span, find_end_point, fit_line_ransac, transform_inverse
 
-# 读取参数
-is_bag = 1
-is_save = 0
-bag_file = "/home/dingrong/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.bag"
+
+# 读取毫米波雷达参数
 xwr_cfg = "/home/dingrong/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
 for line in open(xwr_cfg):
     line = line.rstrip('\r\n')
@@ -47,38 +48,42 @@ print("range resolution: ", range_res)
 print("doppler resolution: ", doppler_res)
 print("frame bytes: ", frame_bytes)
 
-fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(24, 8))
+
+gt_range = [-8, 2, 0, 1.5]  # 切割人的点云
+fig, ax = plt.subplots(figsize=(8, 8))
+color_panel = ['ro', 'go', 'bo', 'co', 'wo', 'yo', 'mo', 'ko']
 
 def init_fig():
-    ax1.clear()
-    ax1.set_xlabel('x(m)')
-    ax1.set_ylabel('y(m)')
-    ax1.set_xlim([-5, 5])
-    ax1.set_ylim([0, 10])
-    ax2.clear()
-    ax2.set_xlabel('Azimuth')
-    ax2.set_ylabel('Range')
-    ax2.set_title('RA heat map')
-    ax3.clear()
-    ax3.set_xlabel('Doppler')
-    ax3.set_ylabel('Range')
-    ax3.set_title('RD heat map')
-    ax4.clear()
-    ax4.set_xlabel('x(m)')
-    ax4.set_ylabel('y(m)')
+    ax.clear()
+    ax.set_xlabel('x(m)')
+    ax.set_ylabel('y(m)')
+    ax.set_xlim([-5, 5])
+    ax.set_ylim([0, 10])
+    ax.tick_params(direction='in')
 
+file_path = "/home/dingrong/Code/ackermann_car_nav/data/20230613/software3_beichen_2023-06-13-16-49-17"
+fwrite = open(f"{file_path}.txt", 'w')
+save_gif = False
 def gen_data():
-    if is_bag:
-        for topic, msg, t in rosbag.Bag(bag_file, 'r'):
-            if topic == '/mmwave_radar_raw_data':
-                adc_pack = struct.pack(f">{frame_bytes}b", *msg.data)
-                adc_unpack = np.frombuffer(adc_pack, dtype=np.int16)
-                yield adc_unpack, msg.header.seq
-    else:
-        for cnt in range(100):
-            data_path = f"/home/dingrong/Code/ackermann_car_nav/data/person_walk/test_{cnt+1}.bin"
-            adc_data = np.fromfile(data_path, dtype=np.int16)
-            yield adc_data, cnt
+    with open(f"{file_path}.pkl", 'rb') as f:
+        all_point_cloud = pickle.load(f)
+    for t, laser_pc, laser_pc2, mmwave_pc, mmwave_raw_data, trans in all_point_cloud:
+        inter, theta = trans
+        theta = theta * 180 / np.pi
+        
+        # 生成毫米波RA tensor
+        RA_cart, mmwave_point_cloud = gen_point_cloud_plan3(mmwave_raw_data)
+        
+        # 标定激光雷达点云只保留人
+        flag_x = np.logical_and(laser_pc2[:, 0]>=gt_range[0], laser_pc2[:, 0]<=gt_range[1])
+        flag_y = np.logical_and(laser_pc2[:, 1]>=gt_range[2], laser_pc2[:, 1]<=gt_range[3])
+        flag = np.logical_and(flag_x, flag_y) 
+        laser_point_cloud2 = laser_pc2[flag]
+        # 标定激光雷达->小车坐标系->毫米波雷达坐标系
+        laser_point_cloud2 = transform_inverse(laser_point_cloud2, inter[0], inter[1], 360-theta)
+        laser_point_cloud2 = transform_inverse(laser_point_cloud2, 0.17, 0, 90)
+        yield t, laser_point_cloud2, RA_cart, mmwave_point_cloud
+
 
 def gen_point_cloud_plan3(adc_data):
     # 2. 整理数据格式 Tx*num_chirps, num_rx, num_samples
@@ -91,7 +96,7 @@ def gen_point_cloud_plan3(adc_data):
     # 3. range fft, 48 x 4 x 256
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=num_tx, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=num_tx, clutter_removal_enabled=True, window_type_2d=Window.HAMMING)
     # 5. MUSIC aoa
     # 100 x 16 x 8
     azimuthInput = aoa_input[begin_range:end_range+1, :8, :].transpose(0, 2, 1)
@@ -102,15 +107,6 @@ def gen_point_cloud_plan3(adc_data):
     # 100 x 181
     RA = np.mean(spectrum, axis=1)
     RA_log = np.log2(RA)
-
-    # RA 可视化
-    axis_range = np.arange(num_samples) * range_res
-    axis_azimuth = np.arange(angle_bins_azimuth) * np.pi / 180
-    ax2.imshow(RA, extent=[axis_azimuth.min(), axis_azimuth.max(), axis_range.max(), axis_range.min()])
-    # RD 可视化
-    RD = np.mean(spectrum, axis=2)
-    axis_doppler = (np.arange(num_chirps) - (num_chirps // 2)) * doppler_res
-    ax3.imshow(RD, extent=[axis_doppler.min(), axis_doppler.max(), axis_range.max(), axis_range.min()])
 
     # --- cfar in azimuth direction
     first_pass, _ = np.apply_along_axis(func1d=dsp.ca_,
@@ -136,7 +132,6 @@ def gen_point_cloud_plan3(adc_data):
     if len(pairs) < 1:
         return None
     ranges, azimuths = pairs[:, 0], pairs[:, 1]
-    snrs = RA_log[ranges, azimuths] - noise_floor[ranges, azimuths]
 
     # RD转化到笛卡尔坐标系下可视化
     W = end_range + 1
@@ -156,7 +151,6 @@ def gen_point_cloud_plan3(adc_data):
     bbox = np.zeros((W, W*2, 2)) 
     bbox[..., 0] = rcs.min()
     bbox[ys_idx2, xs_idx2, 0] = rcs
-    ax4.imshow(bbox[..., 0])
 
     # 7. doppler estimation
     dopplers = np.argmax(spectrum[ranges, :, azimuths], axis=1)
@@ -168,33 +162,32 @@ def gen_point_cloud_plan3(adc_data):
 
     x_pos = ranges * np.cos(azimuths)
     y_pos = ranges * np.sin(azimuths)
-    z_pos = np.zeros_like(ranges)
+    point_cloud = np.array([x_pos, y_pos, dopplers]).T
 
     # 增加速度特征
     xs_idx2 = (x_pos // range_res).astype(np.int) + W
     ys_idx2 = (y_pos // range_res).astype(np.int)
     bbox[ys_idx2, xs_idx2, 1] = dopplers
-    return x_pos, y_pos, z_pos, dopplers, snrs
+    return bbox, point_cloud
+
 
 def visualize(result):
     init_fig()
-    adc_data, seq = result
-    point_cloud = gen_point_cloud_plan3(adc_data)
-    if point_cloud is not None:
-        x_pos, y_pos, z_pos, dopplers, snrs = point_cloud
-        point_cloud = np.array([x_pos, y_pos]).T
-        # point_cloud = transform(point_cloud, 0.17, 0, 60)
-        static_idx = np.abs(dopplers) <= doppler_res
-        dynamic_idx = np.abs(dopplers) > doppler_res
-        ax1.set_title(f"frame id: {seq}")
-        ax1.plot(point_cloud[static_idx, 0], point_cloud[static_idx, 1], 'ob', ms=2)
-        ax1.plot(point_cloud[dynamic_idx, 0], point_cloud[dynamic_idx, 1], 'or', ms=2)
+    t, laser_point_cloud2, RA_cart, mmwave_point_cloud = result
+
+    ax.set_title(f"Timestamp: {t:.2f}s")
+    ax.plot(laser_point_cloud2[:, 0], laser_point_cloud2[:, 1], color_panel[-3], ms=2)
+    static_idx = np.abs(mmwave_point_cloud[:, 2]) <= doppler_res
+    dynamic_idx = np.abs(mmwave_point_cloud[:, 2]) > doppler_res
+    ax.plot(mmwave_point_cloud[static_idx, 0], mmwave_point_cloud[static_idx, 1], 'ob', ms=2)
+    ax.plot(mmwave_point_cloud[dynamic_idx, 0], mmwave_point_cloud[dynamic_idx, 1], 'or', ms=2)
 
 
 ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=200,
-    init_func=init_fig, repeat=True, save_count=100
+    init_func=init_fig, repeat=True, save_count=500
 )
-if is_save:
-    ani.save("plan1.gif", writer='imagemagick')
+writergif = animation.PillowWriter(fps=10)
+if save_gif:
+    ani.save(f"{file_path}.gif", writer=writergif)
 plt.show()
