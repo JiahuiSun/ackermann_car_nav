@@ -145,7 +145,7 @@ if not os.path.exists(f"{out_path}/labels/{mode}"):
     os.makedirs(f"{out_path}/labels/{mode}")
 if not os.path.exists(f"{out_path}/gifs"):
     os.makedirs(f"{out_path}/gifs")
-save_gif = True
+save_gif = False
 save_box = False
 cnt = 0
 local_sensing_range = [-0.5, 5, -3, 3]
@@ -289,7 +289,11 @@ def visualize(result):
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
             fwrite = open(txt_path, 'w')
             cnt += 1
-            fwrite.write(f"0 {center[0]/(W*2*range_res)} {center[1]/(W*range_res)} {box_length/(W*2*range_res)} {box_width/(W*range_res)}\n")
+            x_norm = (center[0]+W*range_res) / (W*2*range_res)
+            y_norm = center[1] / (W*range_res)
+            length_norm = box_length / (W*2*range_res)
+            width_norm = box_width / (W*range_res)
+            fwrite.write(f"0 {x_norm} {y_norm} {length_norm} {width_norm}\n")
             fwrite.close()
 
     # 可视化所有点云
