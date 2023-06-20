@@ -11,13 +11,14 @@ from mmwave.dsp.utils import Window
 from music import aoa_music_1D_mat
 import pandas as pd
 import os
+import cv2
 
 from nlos_sensing import transform, nlosFilterAndMapping, bounding_box, line_symmetry_point
 from nlos_sensing import get_span, find_end_point, fit_line_ransac, transform_inverse
 
 
 # 读取毫米波雷达参数
-xwr_cfg = "/home/agent/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
+xwr_cfg = "/home/dingrong/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
 for line in open(xwr_cfg):
     line = line.rstrip('\r\n')
     if line.startswith('profileCfg'):
@@ -112,7 +113,7 @@ def gen_point_cloud_plan3(adc_data):
     xs_idx2 = (df_group.x_idx + W).to_numpy()
     ys_idx2 = df_group.y_idx.to_numpy()
     rcs = df_group.rcs.to_numpy()
-    bbox = np.zeros((W, W*2, 2)) 
+    bbox = np.zeros((W, W*2, 1))
     bbox[..., 0] = rcs.min()
     bbox[ys_idx2, xs_idx2, 0] = rcs
 
@@ -129,15 +130,15 @@ def gen_point_cloud_plan3(adc_data):
     point_cloud = np.array([x_pos, y_pos, dopplers]).T
 
     # 增加速度特征
-    xs_idx2 = (x_pos // range_res).astype(np.int32) + W
-    ys_idx2 = (y_pos // range_res).astype(np.int32)
-    bbox[ys_idx2, xs_idx2, 1] = dopplers
+    # xs_idx2 = (x_pos // range_res).astype(np.int32) + W
+    # ys_idx2 = (y_pos // range_res).astype(np.int32)
+    # bbox[ys_idx2, xs_idx2, 1] = dopplers
     return bbox, point_cloud
 
 
-file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.pkl"
+file_path = "/home/dingrong/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.pkl"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
-out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230530"
+out_path = "/home/dingrong/Code/ackermann_car_nav/data/data_20230530"
 mode = "train"
 if not os.path.exists(f"{out_path}/images/{mode}"):
     os.makedirs(f"{out_path}/images/{mode}")
@@ -284,8 +285,10 @@ def visualize(result):
 
         # 保存你想要的
         if not save_gif:
-            image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.npy"
-            np.save(image_path, RA_cart)
+            image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.png"
+            RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
+            RA_cart = (RA_cart * 255).astype('uint8')
+            cv2.imwrite(image_path, RA_cart)
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
             fwrite = open(txt_path, 'w')
             cnt += 1
