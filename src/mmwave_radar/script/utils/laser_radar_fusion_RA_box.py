@@ -164,7 +164,7 @@ def init_fig():
     ax.clear()
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
-    ax.set_xlim([-5, 5])
+    ax.set_xlim([-7, 5])
     ax.set_ylim([-2, 8])
     ax.tick_params(direction='in')
     ax2.clear()
@@ -261,7 +261,7 @@ def visualize(result):
     if len(point_cloud_nlos) > 5 and len(laser_point_cloud2) > 0 and not save_box:
         save_box = True
     if save_box:
-        # 如果人位于NLoS区域，把ground truth给映射过去
+        # FIXME: 如果人位于NLoS区域，把ground truth给映射过去
         if len(point_cloud_nlos) > 5:
             laser_point_cloud2 = line_symmetry_point(corner_args['far_wall'], laser_point_cloud2)
         # 打bounding box
@@ -283,13 +283,13 @@ def visualize(result):
         ax.plot(*bottom_left, color_panel[2], ms=2)
 
         # 保存你想要的
-        if save_gif:
+        if not save_gif:
             image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.npy"
             np.save(image_path, RA_cart)
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
             fwrite = open(txt_path, 'w')
             cnt += 1
-            fwrite.write(f"0 {center[0]/W/2} {center[1]/W} {box_length/W/2} {box_width/W}\n")
+            fwrite.write(f"0 {center[0]/(W*2*range_res)} {center[1]/(W*range_res)} {box_length/(W*2*range_res)} {box_width/(W*range_res)}\n")
             fwrite.close()
 
     # 可视化所有点云
