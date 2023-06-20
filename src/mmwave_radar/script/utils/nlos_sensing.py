@@ -19,6 +19,14 @@ def get_span(points):
 
 
 def find_end_point(points, axis=0):
+    """
+    Args:
+        points: Nx2, [x, y]
+        axis: 按哪个坐标轴比较大小
+    
+    Returns:
+        min_p, max_p: 在axis轴上最小和最大的点
+    """
     max_v, min_v = -np.inf, np.inf
     max_p, min_p = None, None
     for p in points:
@@ -221,9 +229,9 @@ def nlosFilterAndMapping(point_cloud, radar_pos, corner_args):
     far_map_radar_corner_line = line_by_coef_p(far_wall, far_map_corner)
     inter2 = intersection_of_2line(far_map_radar_corner_line, radar_corner_line)
     flag = isin_triangle(far_map_corner, inter2, inter1, point_cloud[:, :2])
+    point_cloud_filter = point_cloud[flag]
 
     # Mapping
-    point_cloud_filter = point_cloud[flag]
     point_cloud_filter[:, :2] = line_symmetry_point(far_wall, point_cloud_filter[:, :2])
     return point_cloud_filter
 
