@@ -14,8 +14,8 @@ import pandas as pd
 # 读取参数
 is_bag = 1
 is_save = 0
-bag_file = "/home/dingrong/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.bag"
-xwr_cfg = "/home/dingrong/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
+bag_file = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.bag"
+xwr_cfg = "/home/agent/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
 for line in open(xwr_cfg):
     line = line.rstrip('\r\n')
     if line.startswith('profileCfg'):
@@ -76,7 +76,7 @@ def gen_data():
                 yield adc_unpack, msg.header.seq
     else:
         for cnt in range(100):
-            data_path = f"/home/dingrong/Code/ackermann_car_nav/data/person_walk/test_{cnt+1}.bin"
+            data_path = f"/home/agent/Code/ackermann_car_nav/data/person_walk/test_{cnt+1}.bin"
             adc_data = np.fromfile(data_path, dtype=np.int16)
             yield adc_data, cnt
 
@@ -145,8 +145,8 @@ def gen_point_cloud_plan3(adc_data):
     xs_idx = axis_range * np.cos(axis_azimuth) // range_res
     ys_idx = axis_range * np.sin(axis_azimuth) // range_res
     df = pd.DataFrame({
-        'x_idx': xs_idx.flatten().astype(np.int),
-        'y_idx': ys_idx.flatten().astype(np.int),
+        'x_idx': xs_idx.flatten().astype(np.int32),
+        'y_idx': ys_idx.flatten().astype(np.int32),
         'rcs': RA.flatten()
     })
     df_group = df.groupby(['x_idx', 'y_idx'], as_index=False).mean()
@@ -171,8 +171,8 @@ def gen_point_cloud_plan3(adc_data):
     z_pos = np.zeros_like(ranges)
 
     # 增加速度特征
-    xs_idx2 = (x_pos // range_res).astype(np.int) + W
-    ys_idx2 = (y_pos // range_res).astype(np.int)
+    xs_idx2 = (x_pos // range_res).astype(np.int32) + W
+    ys_idx2 = (y_pos // range_res).astype(np.int32)
     bbox[ys_idx2, xs_idx2, 1] = dopplers
     return x_pos, y_pos, z_pos, dopplers, snrs
 

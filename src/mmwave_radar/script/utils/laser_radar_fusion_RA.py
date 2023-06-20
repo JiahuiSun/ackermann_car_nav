@@ -16,7 +16,7 @@ from nlos_sensing import get_span, find_end_point, fit_line_ransac, transform_in
 
 
 # 读取毫米波雷达参数
-xwr_cfg = "/home/dingrong/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
+xwr_cfg = "/home/agent/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
 for line in open(xwr_cfg):
     line = line.rstrip('\r\n')
     if line.startswith('profileCfg'):
@@ -47,44 +47,7 @@ frame_bytes = num_samples * num_chirps * num_tx * num_rx * 2 * 2
 print("range resolution: ", range_res)
 print("doppler resolution: ", doppler_res)
 print("frame bytes: ", frame_bytes)
-
-
-gt_range = [-8, 2, 0, 1.5]  # 切割人的点云
-fig, ax = plt.subplots(figsize=(8, 8))
-color_panel = ['ro', 'go', 'bo', 'co', 'wo', 'yo', 'mo', 'ko']
-
-def init_fig():
-    ax.clear()
-    ax.set_xlabel('x(m)')
-    ax.set_ylabel('y(m)')
-    ax.set_xlim([-5, 5])
-    ax.set_ylim([0, 10])
-    ax.tick_params(direction='in')
-
-file_path = "/home/dingrong/Code/ackermann_car_nav/data/20230613/software3_beichen_2023-06-13-16-49-17"
-fwrite = open(f"{file_path}.txt", 'w')
-save_gif = False
-def gen_data():
-    with open(f"{file_path}.pkl", 'rb') as f:
-        all_point_cloud = pickle.load(f)
-    for t, laser_pc, laser_pc2, mmwave_pc, mmwave_raw_data, trans in all_point_cloud:
-        inter, theta = trans
-        theta = theta * 180 / np.pi
-        
-        # 生成毫米波RA tensor
-        RA_cart, mmwave_point_cloud = gen_point_cloud_plan3(mmwave_raw_data)
-        
-        # 标定激光雷达点云只保留人
-        flag_x = np.logical_and(laser_pc2[:, 0]>=gt_range[0], laser_pc2[:, 0]<=gt_range[1])
-        flag_y = np.logical_and(laser_pc2[:, 1]>=gt_range[2], laser_pc2[:, 1]<=gt_range[3])
-        flag = np.logical_and(flag_x, flag_y) 
-        laser_point_cloud2 = laser_pc2[flag]
-        # 标定激光雷达->小车坐标系->毫米波雷达坐标系
-        laser_point_cloud2 = transform_inverse(laser_point_cloud2, inter[0], inter[1], 360-theta)
-        laser_point_cloud2 = transform_inverse(laser_point_cloud2, 0.17, 0, 90)
-        yield t, laser_point_cloud2, RA_cart, mmwave_point_cloud, mmwave_pc
-
-
+# 生成RA tensor和毫米波点云的代码
 def gen_point_cloud_plan3(adc_data):
     # 2. 整理数据格式 Tx*num_chirps, num_rx, num_samples
     # adc_data 48 x 4 x 256
@@ -140,8 +103,8 @@ def gen_point_cloud_plan3(adc_data):
     xs_idx = axis_range * np.cos(axis_azimuth) // range_res
     ys_idx = axis_range * np.sin(axis_azimuth) // range_res
     df = pd.DataFrame({
-        'x_idx': xs_idx.flatten().astype(np.int),
-        'y_idx': ys_idx.flatten().astype(np.int),
+        'x_idx': xs_idx.flatten().astype(np.int32),
+        'y_idx': ys_idx.flatten().astype(np.int32),
         'rcs': RA.flatten()
     })
     df_group = df.groupby(['x_idx', 'y_idx'], as_index=False).mean()
@@ -165,10 +128,48 @@ def gen_point_cloud_plan3(adc_data):
     point_cloud = np.array([x_pos, y_pos, dopplers]).T
 
     # 增加速度特征
-    xs_idx2 = (x_pos // range_res).astype(np.int) + W
-    ys_idx2 = (y_pos // range_res).astype(np.int)
+    xs_idx2 = (x_pos // range_res).astype(np.int32) + W
+    ys_idx2 = (y_pos // range_res).astype(np.int32)
     bbox[ys_idx2, xs_idx2, 1] = dopplers
     return bbox, point_cloud
+
+
+gt_range = [-8, 2, 0, 1.5]  # 切割人的点云
+fig, ax = plt.subplots(figsize=(8, 8))
+color_panel = ['ro', 'go', 'bo', 'co', 'wo', 'yo', 'mo', 'ko']
+
+def init_fig():
+    ax.clear()
+    ax.set_xlabel('x(m)')
+    ax.set_ylabel('y(m)')
+    ax.set_xlim([-5, 5])
+    ax.set_ylim([0, 10])
+    ax.tick_params(direction='in')
+
+file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38"
+save_gif = False
+def gen_data():
+    with open(f"{file_path}.pkl", 'rb') as f:
+        all_point_cloud = pickle.load(f)
+    for t, laser_pc, laser_pc2, mmwave_pc, mmwave_raw_data, trans in all_point_cloud:
+        inter, theta = trans
+        theta = theta * 180 / np.pi
+        
+        # 生成毫米波RA tensor
+        result = gen_point_cloud_plan3(mmwave_raw_data)
+        if result is None:
+            continue
+        RA_cart, mmwave_point_cloud = result
+        
+        # 标定激光雷达点云只保留人
+        flag_x = np.logical_and(laser_pc2[:, 0]>=gt_range[0], laser_pc2[:, 0]<=gt_range[1])
+        flag_y = np.logical_and(laser_pc2[:, 1]>=gt_range[2], laser_pc2[:, 1]<=gt_range[3])
+        flag = np.logical_and(flag_x, flag_y) 
+        laser_point_cloud2 = laser_pc2[flag]
+        # 标定激光雷达->小车坐标系->毫米波雷达坐标系
+        laser_point_cloud2 = transform_inverse(laser_point_cloud2, inter[0], inter[1], 360-theta)
+        laser_point_cloud2 = transform_inverse(laser_point_cloud2, 0.17, 0, 90)
+        yield t, laser_point_cloud2, RA_cart, mmwave_point_cloud, mmwave_pc
 
 
 def visualize(result):
