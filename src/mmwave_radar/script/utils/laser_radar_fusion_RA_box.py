@@ -8,10 +8,11 @@ from sklearn.cluster import DBSCAN
 import mmwave.dsp as dsp
 import pickle
 from mmwave.dsp.utils import Window
-from music import aoa_music_1D, aoa_music_1D_mat
+from music import aoa_music_1D_mat
 import pandas as pd
+import os
 
-from nlos_sensing import transform, nlosFilterAndMapping, bounding_box
+from nlos_sensing import transform, nlosFilterAndMapping, bounding_box, line_symmetry_point
 from nlos_sensing import get_span, find_end_point, fit_line_ransac, transform_inverse
 
 
@@ -40,7 +41,8 @@ angle_range_elevation = 15
 angle_res = 1
 angle_bins_azimuth = (angle_range_azimuth * 2) // angle_res + 1
 angle_bins_elevation = (angle_range_elevation * 2) // angle_res + 1
-begin_range, end_range = 0, 191  # 1.4-5.6
+begin_range, end_range = 0, 159  # 1.4-5.6
+W = end_range + 1
 range_res, bandwidth = dsp.range_resolution(num_samples, dig_out_sample_rate, freq_slop)
 doppler_res = dsp.doppler_resolution(bandwidth, start_freq, ramp_end_time, idle_time, num_chirps, num_tx)
 frame_bytes = num_samples * num_chirps * num_tx * num_rx * 2 * 2
@@ -59,7 +61,7 @@ def gen_point_cloud_plan3(adc_data):
     # 3. range fft, 48 x 4 x 256
     radar_cube = dsp.range_processing(adc_data, window_type_1d=Window.BLACKMAN)
     # 4. Doppler processing, 256x16, 256x12x16
-    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=num_tx, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
+    det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=num_tx, clutter_removal_enabled=True, window_type_2d=Window.HAMMING)
     # 5. MUSIC aoa
     # 100 x 16 x 8
     azimuthInput = aoa_input[begin_range:end_range+1, :8, :].transpose(0, 2, 1)
@@ -97,7 +99,6 @@ def gen_point_cloud_plan3(adc_data):
     ranges, azimuths = pairs[:, 0], pairs[:, 1]
 
     # RD转化到笛卡尔坐标系下可视化
-    W = end_range + 1
     axis_range = np.arange(W).reshape(-1, 1) * range_res
     axis_azimuth = np.arange(angle_bins_azimuth).reshape(1, -1) * np.pi / 180
     xs_idx = axis_range * np.cos(axis_azimuth) // range_res
@@ -134,6 +135,19 @@ def gen_point_cloud_plan3(adc_data):
     return bbox, point_cloud
 
 
+file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.pkl"
+file_name = file_path.split('/')[-1].split('.')[0][:-20]
+out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230530"
+mode = "train"
+if not os.path.exists(f"{out_path}/images/{mode}"):
+    os.makedirs(f"{out_path}/images/{mode}")
+if not os.path.exists(f"{out_path}/labels/{mode}"):
+    os.makedirs(f"{out_path}/labels/{mode}")
+if not os.path.exists(f"{out_path}/gifs"):
+    os.makedirs(f"{out_path}/gifs")
+save_gif = True
+save_box = False
+cnt = 0
 local_sensing_range = [-0.5, 5, -3, 3]
 gt_range = [-8, 2, 0, 1.5]  # 切割人的点云
 min_points_inline = 20
@@ -144,6 +158,7 @@ filter = DBSCAN(eps=1, min_samples=20)
 stamp, accuracy = [], []
 fig, (ax, ax2) = plt.subplots(1, 2, figsize=(16, 8))
 color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'mo', 'ko']
+
 
 def init_fig():
     ax.clear()
@@ -156,12 +171,9 @@ def init_fig():
     ax2.set_xlabel('x')
     ax2.set_ylabel('y')
 
-file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38"
-fwrite = open(f"{file_path}.txt", 'w')
-save_gif = False
-save_box = True
+
 def gen_data():
-    with open(f"{file_path}.pkl", 'rb') as f:
+    with open(file_path, 'rb') as f:
         all_point_cloud = pickle.load(f)
     for t, laser_pc, laser_pc2, mmwave_pc, mmwave_raw_data, trans in all_point_cloud:
         inter, theta = trans
@@ -196,7 +208,7 @@ def gen_data():
 
 
 def visualize(result):
-    global save_box
+    global save_box, cnt
     init_fig()
     t, laser_point_cloud2, laser_point_cloud, RA_cart, mmwave_point_cloud, mmwave_pc = result
 
@@ -224,7 +236,7 @@ def visualize(result):
         laser_point_cloud = laser_point_cloud[outlier_mask]
         fitted_lines.append([coef, inlier_points])
 
-    # 区分墙面，就针对L开放型转角做
+    # 区分墙面，目前就针对L开放型转角做
     corner_args = {}
     coef1, inlier_points1 = fitted_lines[0]
     center1 = np.mean(inlier_points1, axis=0)
@@ -245,6 +257,41 @@ def visualize(result):
     # 过滤和映射
     point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0, 0]), corner_args)
 
+    # 当人进入NLoS区域后，开始打bbox，保存RA tensor
+    if len(point_cloud_nlos) > 5 and len(laser_point_cloud2) > 0 and not save_box:
+        save_box = True
+    if save_box:
+        # 如果人位于NLoS区域，把ground truth给映射过去
+        if len(point_cloud_nlos) > 5:
+            laser_point_cloud2 = line_symmetry_point(corner_args['far_wall'], laser_point_cloud2)
+        # 打bounding box
+        key_points, box_length, box_width = bounding_box(laser_point_cloud2, corner_args['far_wall'])
+        center, top_right, bottom_right, bottom_left, top_left = key_points
+        x = [top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]
+        y = [top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]
+        # xy的最大最小值，得到两个角点，再得到中心点，box
+        # min_x, max_x = laser_point_cloud2[:, 0].min()-0.1, laser_point_cloud2[:, 0].max()+0.1
+        # min_y, max_y = laser_point_cloud2[:, 1].min()-0.1, laser_point_cloud2[:, 1].max()+0.1
+        # top_right = np.array([max_x, max_y])
+        # bottom_left = np.array([min_x, min_y])
+        # center = (top_right + bottom_left) / 2
+        # x = [max_x, max_x, min_x, min_x, max_x]
+        # y = [max_y, min_y, min_y, max_y, max_y]
+        ax.plot(x, y, 'k-', lw=1)
+        ax.plot(*center, color_panel[-1], ms=2)
+        ax.plot(*top_right, color_panel[1], ms=2)
+        ax.plot(*bottom_left, color_panel[2], ms=2)
+
+        # 保存你想要的
+        if save_gif:
+            image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.npy"
+            np.save(image_path, RA_cart)
+            txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
+            fwrite = open(txt_path, 'w')
+            cnt += 1
+            fwrite.write(f"0 {center[0]/W/2} {center[1]/W} {box_length/W/2} {box_width/W}\n")
+            fwrite.close()
+
     # 可视化所有点云
     ax.set_title(f"Timestamp: {t:.2f}s")
     # 毫米波雷达
@@ -259,31 +306,6 @@ def visualize(result):
     ax.plot(inlier_points1[:, 0], inlier_points1[:, 1], color_panel[1], ms=2)
     ax.plot(inlier_points2[:, 0], inlier_points2[:, 1], color_panel[1], ms=2)
     ax.plot(laser_point_cloud2[:, 0], laser_point_cloud2[:, 1], color_panel[-1], ms=2)
-    
-    # 当人进入NLoS区域后，开始保存数据
-    if len(point_cloud_nlos) > 0 and len(laser_point_cloud2) > 0 and save_box:
-        save_box = False
-    if not save_box:
-        laser_center = laser_point_cloud2.mean(axis=0)
-        theta = np.arccos(laser_center[0]/np.linalg.norm(laser_center)) * 180 / np.pi
-        # 打bounding box
-        key_points, box_length, box_width = bounding_box(laser_point_cloud2, corner_args['far_wall'])
-        center, top_right, bottom_right, bottom_left, top_left = key_points
-        x = [top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]
-        y = [top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]
-        # xy的最大最小值，得到两个角点，再得到中心点，box
-        # min_x, max_x = laser_point_cloud2[:, 0].min()-0.1, laser_point_cloud2[:, 0].max()+0.1
-        # min_y, max_y = laser_point_cloud2[:, 1].min()-0.1, laser_point_cloud2[:, 1].max()+0.1
-        # top_right = np.array([max_x, max_y])
-        # bottom_left = np.array([min_x, min_y])
-        # center = (top_right + bottom_left) / 2
-        # x = [max_x, max_x, min_x, min_x, max_x]
-        # y = [max_y, min_y, min_y, max_y, max_y]
-
-        ax.plot(x, y, 'k-', lw=1)
-        ax.plot(*center, color_panel[-1], ms=2)
-        ax.plot(*top_right, color_panel[1], ms=2)
-        ax.plot(*bottom_left, color_panel[2], ms=2)
 
 
 ani = animation.FuncAnimation(
@@ -292,5 +314,6 @@ ani = animation.FuncAnimation(
 )
 writergif = animation.PillowWriter(fps=10)
 if save_gif:
-    ani.save(f"{file_path}.gif", writer=writergif)
+    gif_path = f"{out_path}/gifs/{file_name}.gif"
+    ani.save(gif_path, writer=writergif)
 plt.show()
