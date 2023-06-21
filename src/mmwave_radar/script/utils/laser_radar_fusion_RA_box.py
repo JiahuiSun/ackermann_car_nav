@@ -18,7 +18,7 @@ from nlos_sensing import get_span, find_end_point, fit_line_ransac, transform_in
 
 
 # 读取毫米波雷达参数
-xwr_cfg = "/home/dingrong/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
+xwr_cfg = "/home/agent/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
 for line in open(xwr_cfg):
     line = line.rstrip('\r\n')
     if line.startswith('profileCfg'):
@@ -136,9 +136,9 @@ def gen_point_cloud_plan3(adc_data):
     return bbox, point_cloud
 
 
-file_path = "/home/dingrong/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.pkl"
+file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.pkl"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
-out_path = "/home/dingrong/Code/ackermann_car_nav/data/data_20230530"
+out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230530"
 mode = "train"
 if not os.path.exists(f"{out_path}/images/{mode}"):
     os.makedirs(f"{out_path}/images/{mode}")
