@@ -13,7 +13,7 @@ import pandas as pd
 import os
 import cv2
 
-from nlos_sensing import transform, nlosFilterAndMapping, bounding_box, line_symmetry_point
+from nlos_sensing import transform, nlos_filter_and_mapping, bounding_box, line_symmetry_point
 from nlos_sensing import get_span, find_end_point, fit_line_ransac, transform_inverse
 
 
@@ -256,7 +256,7 @@ def visualize(result):
         corner_args['barrier_corner'] = np.array(barrier_corner)
 
     # 过滤和映射
-    point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0, 0]), corner_args)
+    point_cloud_nlos = nlos_filter_and_mapping(mmwave_point_cloud, np.array([0, 0]), corner_args)
 
     # 当人进入NLoS区域后，开始打bbox，保存RA tensor
     if len(point_cloud_nlos) > 5 and len(laser_point_cloud2) > 0 and not save_box:

@@ -6,7 +6,7 @@ import pickle
 import rosbag
 from sensor_msgs import point_cloud2
 
-from nlos_sensing import transform, nlosFilterAndMapping, line_symmetry_point
+from nlos_sensing import transform, nlos_filter_and_mapping, line_symmetry_point
 from nlos_sensing import get_span, find_end_point, fit_line_ransac
 
 

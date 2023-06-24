@@ -215,7 +215,7 @@ def bounding_box(laser_point_cloud, wall_coef, inter=None, theta=None, delta_x=0
     return (box_center, top_right, bottom_right, bottom_left, top_left), box_length, box_width
 
 
-def nlosFilterAndMapping(point_cloud, radar_pos, corner_args):
+def nlos_filter_and_mapping(point_cloud, radar_pos, corner_args):
     """TODO: 现在只实现了1种转角
     """
     far_wall = corner_args['far_wall']
@@ -225,15 +225,34 @@ def nlosFilterAndMapping(point_cloud, radar_pos, corner_args):
     # Filter
     far_map_corner = line_symmetry_point(far_wall, barrier_corner)
     radar_corner_line = line_by_2p(radar_pos, barrier_corner)
-    inter1 = intersection_of_2line(far_wall, radar_corner_line)
     far_map_radar_corner_line = line_by_coef_p(far_wall, far_map_corner)
+    inter1 = intersection_of_2line(far_wall, radar_corner_line)
     inter2 = intersection_of_2line(far_map_radar_corner_line, radar_corner_line)
+    # 只保留三角形内的点
     flag = isin_triangle(far_map_corner, inter2, inter1, point_cloud[:, :2])
     point_cloud_filter = point_cloud[flag]
 
     # Mapping
     point_cloud_filter[:, :2] = line_symmetry_point(far_wall, point_cloud_filter[:, :2])
     return point_cloud_filter
+
+
+def nlos_mapping(point_cloud, radar_pos, corner_args):
+    far_wall = corner_args['far_wall']
+    barrier_wall = corner_args['barrier_wall']
+    barrier_corner = corner_args['barrier_corner']
+
+    far_map_corner = line_symmetry_point(far_wall, barrier_corner)
+    far_map_radar = line_symmetry_point(far_wall, radar_pos)
+    far_map_radar_corner = line_by_2p(far_map_radar, far_map_corner)
+    far_corner_line = line_by_coef_p(far_wall, barrier_corner)
+    inter1 = intersection_of_2line(far_map_radar_corner, far_wall)
+    inter2 = intersection_of_2line(far_map_radar_corner, far_corner_line)
+    # 当激光雷达点云中心点在三角形内，就映射
+    center = np.mean(point_cloud, axis=0)
+    flag = isin_triangle(barrier_corner, inter1, inter2, center)
+    point_cloud_mapped = line_symmetry_point(far_wall, point_cloud) if flag else point_cloud
+    return point_cloud_mapped
 
 
 def transform(radar_xy, delta_x, delta_y, yaw):

@@ -7,7 +7,7 @@ rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
 from sklearn.cluster import DBSCAN
 import pickle
 
-from nlos_sensing import transform, nlosFilterAndMapping, bounding_box
+from nlos_sensing import transform, nlos_filter_and_mapping, bounding_box
 from nlos_sensing import get_span, find_end_point, fit_line_ransac
 
 
@@ -109,7 +109,7 @@ def visualize(result):
                 barrier_corner = find_end_point(inlier_points1, 0)[1]
                 corner_args['barrier_corner'] = np.array(barrier_corner) # x值最大的
             # 过滤和映射
-            point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0.17, 0]), corner_args)
+            point_cloud_nlos = nlos_filter_and_mapping(mmwave_point_cloud, np.array([0.17, 0]), corner_args)
 
             # 把毫米波雷达、激光雷达点云变换到标定坐标系下
             point_cloud_nlos[:, :2] = transform(point_cloud_nlos[:, :2], inter[0], inter[1], 360-theta)

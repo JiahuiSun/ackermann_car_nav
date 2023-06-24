@@ -11,7 +11,7 @@ from mmwave.dsp.utils import Window
 from music import aoa_music_1D, aoa_music_1D_mat
 import pandas as pd
 
-from nlos_sensing import transform, nlosFilterAndMapping, bounding_box
+from nlos_sensing import transform, nlos_filter_and_mapping, bounding_box
 from nlos_sensing import get_span, find_end_point, fit_line_ransac, transform_inverse
 
 

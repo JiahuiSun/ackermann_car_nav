@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 import pickle
 
-from nlos_sensing import transform, nlosFilterAndMapping, line_symmetry_point
+from nlos_sensing import transform, nlos_filter_and_mapping, line_symmetry_point
 from nlos_sensing import get_span, find_end_point, fit_line_ransac
 
 
@@ -101,7 +101,7 @@ def visualize(result):
             far_map_radar = line_symmetry_point(corner_args['far_wall'], np.array([0.17, 0]))
             ax.plot(*far_map_corner, color_panel[-3], ms=8)
             ax.plot(*far_map_radar, color_panel[-3], ms=8)
-            point_cloud_nlos = nlosFilterAndMapping(mmwave_point_cloud, np.array([0.17, 0]), corner_args)
+            point_cloud_nlos = nlos_filter_and_mapping(mmwave_point_cloud, np.array([0.17, 0]), corner_args)
             ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[-3], ms=2)
 
 
