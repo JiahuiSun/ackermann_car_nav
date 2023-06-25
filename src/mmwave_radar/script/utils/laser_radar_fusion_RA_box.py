@@ -13,8 +13,9 @@ import pandas as pd
 import os
 import cv2
 
-from nlos_sensing import transform, nlos_filter_and_mapping, bounding_box, line_symmetry_point
-from nlos_sensing import get_span, find_end_point, fit_line_ransac, transform_inverse
+from nlos_sensing import transform, bounding_box, intersection_of_2line, isin_triangle
+from nlos_sensing import get_span, find_end_point, fit_line_ransac, line_by_coef_p
+from nlos_sensing import transform_inverse, line_symmetry_point, line_by_2p
 
 
 # 读取毫米波雷达参数
@@ -146,8 +147,8 @@ if not os.path.exists(f"{out_path}/labels/{mode}"):
     os.makedirs(f"{out_path}/labels/{mode}")
 if not os.path.exists(f"{out_path}/gifs"):
     os.makedirs(f"{out_path}/gifs")
-save_gif = False
-save_box = False
+save_gif = True
+plot_radar_pc = True
 cnt = 0
 local_sensing_range = [-0.5, 5, -3, 3]
 gt_range = [-8, 2, 0, 1.5]  # 切割人的点云
@@ -209,7 +210,7 @@ def gen_data():
 
 
 def visualize(result):
-    global save_box, cnt
+    global cnt
     init_fig()
     t, laser_point_cloud2, laser_point_cloud, RA_cart, mmwave_point_cloud, mmwave_pc = result
 
@@ -238,56 +239,54 @@ def visualize(result):
         fitted_lines.append([coef, inlier_points])
 
     # 区分墙面，目前就针对L开放型转角做
-    corner_args = {}
     coef1, inlier_points1 = fitted_lines[0]
     center1 = np.mean(inlier_points1, axis=0)
     coef2, inlier_points2 = fitted_lines[1]
     center2 = np.mean(inlier_points2, axis=0)
     assert np.abs(coef1[0]-coef2[0]) > 1, "parallel walls?"
     if center1[1] > center2[1]:  # 判断哪个是前墙
-        corner_args['far_wall'] = coef1
-        corner_args['barrier_wall'] = coef2
+        far_wall = coef1
+        barrier_wall = coef2
         barrier_corner = find_end_point(inlier_points2, 1)[1]
-        corner_args['barrier_corner'] = np.array(barrier_corner)
+        barrier_corner = np.array(barrier_corner)
     else:
-        corner_args['far_wall'] = coef2
-        corner_args['barrier_wall'] = coef1
+        far_wall = coef2
+        barrier_wall = coef1
         barrier_corner = find_end_point(inlier_points1, 1)[1]
-        corner_args['barrier_corner'] = np.array(barrier_corner)
+        barrier_corner = np.array(barrier_corner)
 
-    # 过滤和映射
-    point_cloud_nlos = nlos_filter_and_mapping(mmwave_point_cloud, np.array([0, 0]), corner_args)
-
-    # 当人进入NLoS区域后，开始打bbox，保存RA tensor
-    if len(point_cloud_nlos) > 5 and len(laser_point_cloud2) > 0 and not save_box:
-        save_box = True
-    if save_box:
-        # FIXME: 如果人位于NLoS区域，把ground truth给映射过去
-        if len(point_cloud_nlos) > 5:
-            laser_point_cloud2 = line_symmetry_point(corner_args['far_wall'], laser_point_cloud2)
-        # 打bounding box
-        key_points, box_length, box_width = bounding_box(laser_point_cloud2, corner_args['far_wall'])
+    symmtric_corner = line_symmetry_point(far_wall, barrier_corner)
+    line_by_radar_and_corner = line_by_2p(np.array([0, 0]), barrier_corner)
+    line_by_far_wall_and_symmtric_corner = line_by_coef_p(far_wall, symmtric_corner)
+    inter1 = intersection_of_2line(line_by_radar_and_corner, far_wall)
+    inter2 = intersection_of_2line(line_by_radar_and_corner, line_by_far_wall_and_symmtric_corner)
+    inter3 = line_symmetry_point(far_wall, inter2)
+    gt_center = np.mean(laser_point_cloud2, axis=0)
+    # 当人位于边界右边，开始预测
+    if np.cross(inter3-inter1, gt_center-inter1) > 0:
+        # 毫米波点云过滤和映射
+        flag = isin_triangle(symmtric_corner, inter2, inter1, mmwave_point_cloud[:, :2])
+        point_cloud_nlos = mmwave_point_cloud[flag]
+        if len(point_cloud_nlos):
+            point_cloud_nlos[:, :2] = line_symmetry_point(far_wall, point_cloud_nlos[:, :2])
+        # 激光点云映射
+        flag = isin_triangle(barrier_corner, inter1, inter3, gt_center)
+        laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2) if flag else laser_point_cloud2
+        # bounding box ground truth
+        key_points, box_length, box_width = bounding_box(laser_point_cloud2, far_wall)
         center, top_right, bottom_right, bottom_left, top_left = key_points
         x = [top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]
         y = [top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]
-        # xy的最大最小值，得到两个角点，再得到中心点，box
-        # min_x, max_x = laser_point_cloud2[:, 0].min()-0.1, laser_point_cloud2[:, 0].max()+0.1
-        # min_y, max_y = laser_point_cloud2[:, 1].min()-0.1, laser_point_cloud2[:, 1].max()+0.1
-        # top_right = np.array([max_x, max_y])
-        # bottom_left = np.array([min_x, min_y])
-        # center = (top_right + bottom_left) / 2
-        # x = [max_x, max_x, min_x, min_x, max_x]
-        # y = [max_y, min_y, min_y, max_y, max_y]
         ax.plot(x, y, 'k-', lw=1)
         ax.plot(*center, color_panel[-1], ms=2)
-        ax.plot(*top_right, color_panel[1], ms=2)
-        ax.plot(*bottom_left, color_panel[2], ms=2)
+
+        # Image
+        RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
+        RA_cart = (RA_cart * 255).astype('uint8')
 
         # 保存你想要的
         if not save_gif:
             image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.png"
-            RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
-            RA_cart = (RA_cart * 255).astype('uint8')
             cv2.imwrite(image_path, RA_cart)
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
             fwrite = open(txt_path, 'w')
@@ -302,12 +301,13 @@ def visualize(result):
     # 可视化所有点云
     ax.set_title(f"Timestamp: {t:.2f}s")
     # 毫米波雷达
-    ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[3], ms=2)
-    static_idx = np.abs(mmwave_point_cloud[:, 2]) <= doppler_res
-    dynamic_idx = np.abs(mmwave_point_cloud[:, 2]) > doppler_res
-    ax.plot(mmwave_point_cloud[static_idx, 0], mmwave_point_cloud[static_idx, 1], color_panel[2], ms=2)
-    ax.plot(mmwave_point_cloud[dynamic_idx, 0], mmwave_point_cloud[dynamic_idx, 1], color_panel[0], ms=2)
-    ax.plot(mmwave_pc[:, 0], mmwave_pc[:, 1], color_panel[4], ms=2)
+    if plot_radar_pc:
+        ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[3], ms=2)
+        static_idx = np.abs(mmwave_point_cloud[:, 2]) <= doppler_res
+        dynamic_idx = np.abs(mmwave_point_cloud[:, 2]) > doppler_res
+        ax.plot(mmwave_point_cloud[static_idx, 0], mmwave_point_cloud[static_idx, 1], color_panel[2], ms=2)
+        ax.plot(mmwave_point_cloud[dynamic_idx, 0], mmwave_point_cloud[dynamic_idx, 1], color_panel[0], ms=2)
+        ax.plot(mmwave_pc[:, 0], mmwave_pc[:, 1], color_panel[4], ms=2)
     ax2.imshow(RA_cart[..., 0])
     # 激光雷达
     ax.plot(inlier_points1[:, 0], inlier_points1[:, 1], color_panel[1], ms=2)

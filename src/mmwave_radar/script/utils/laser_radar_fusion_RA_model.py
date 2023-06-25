@@ -281,7 +281,8 @@ def visualize(result):
         # 毫米波点云过滤和映射
         flag = isin_triangle(symmtric_corner, inter2, inter1, mmwave_point_cloud[:, :2])
         point_cloud_nlos = mmwave_point_cloud[flag]
-        point_cloud_nlos[:, :2] = line_symmetry_point(far_wall, point_cloud_nlos[:, :2])
+        if len(point_cloud_nlos):
+            point_cloud_nlos[:, :2] = line_symmetry_point(far_wall, point_cloud_nlos[:, :2])
         # 激光点云映射
         flag = isin_triangle(barrier_corner, inter1, inter3, gt_center)
         laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2) if flag else laser_point_cloud2
