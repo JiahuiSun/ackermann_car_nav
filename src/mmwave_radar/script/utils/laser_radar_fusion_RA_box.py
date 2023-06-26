@@ -137,7 +137,7 @@ def gen_point_cloud_plan3(adc_data):
     return bbox, point_cloud
 
 
-file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.pkl"
+file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_60_L_120_angle_0_param1_2023-05-30-16-33-58.pkl"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
 out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230530"
 mode = "train"
@@ -312,6 +312,7 @@ def visualize(result):
     # 激光雷达
     ax.plot(inlier_points1[:, 0], inlier_points1[:, 1], color_panel[1], ms=2)
     ax.plot(inlier_points2[:, 0], inlier_points2[:, 1], color_panel[1], ms=2)
+    ax.plot(laser_point_cloud[:, 0], laser_point_cloud[:, 1], color_panel[1], ms=2)
     ax.plot(laser_point_cloud2[:, 0], laser_point_cloud2[:, 1], color_panel[-1], ms=2)
 
 
