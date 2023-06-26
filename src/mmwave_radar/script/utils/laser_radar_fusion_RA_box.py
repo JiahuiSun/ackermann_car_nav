@@ -137,7 +137,7 @@ def gen_point_cloud_plan3(adc_data):
     return bbox, point_cloud
 
 
-file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_60_L_120_angle_0_param1_2023-05-30-16-33-58.pkl"
+file_path = "/home/agent/Code/ackermann_car_nav/data/test_2023-06-26-14-38-10.pkl"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
 out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230530"
 mode = "train"
@@ -148,10 +148,11 @@ if not os.path.exists(f"{out_path}/labels/{mode}"):
 if not os.path.exists(f"{out_path}/gifs"):
     os.makedirs(f"{out_path}/gifs")
 save_gif = True
-plot_radar_pc = True
+save_data = False
+plot_radar_pc = False
 cnt = 0
 local_sensing_range = [-0.5, 5, -3, 3]
-gt_range = [-8, 2, 0, 1.5]  # 切割人的点云
+gt_range = [-8, 0, -0.3, 1.5]  # 切割人的点云
 min_points_inline = 20
 min_length_inline = 0.6
 ransac_sigma = 0.02
@@ -189,6 +190,8 @@ def gen_data():
         flag_y = np.logical_and(laser_point_cloud[:, 1]>=local_sensing_range[2], laser_point_cloud[:, 1]<=local_sensing_range[3])
         flag = np.logical_and(flag_x, flag_y) 
         laser_point_cloud = laser_point_cloud[flag]
+        if len(laser_point_cloud) < 1:
+            continue
         # 小车->毫米波雷达
         laser_point_cloud = transform_inverse(laser_point_cloud, 0.17, 0, 90)
 
@@ -203,6 +206,8 @@ def gen_data():
         flag_y = np.logical_and(laser_pc2[:, 1]>=gt_range[2], laser_pc2[:, 1]<=gt_range[3])
         flag = np.logical_and(flag_x, flag_y) 
         laser_point_cloud2 = laser_pc2[flag]
+        if len(laser_point_cloud2) < 1:
+            continue
         # 标定激光雷达->小车坐标系->毫米波雷达坐标系
         laser_point_cloud2 = transform_inverse(laser_point_cloud2, inter[0], inter[1], 360-theta)
         laser_point_cloud2 = transform_inverse(laser_point_cloud2, 0.17, 0, 90)
@@ -269,6 +274,8 @@ def visualize(result):
         point_cloud_nlos = mmwave_point_cloud[flag]
         if len(point_cloud_nlos):
             point_cloud_nlos[:, :2] = line_symmetry_point(far_wall, point_cloud_nlos[:, :2])
+            ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[3], ms=2)
+
         # 激光点云映射
         flag = isin_triangle(barrier_corner, inter1, inter3, gt_center)
         laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2) if flag else laser_point_cloud2
@@ -285,7 +292,7 @@ def visualize(result):
         RA_cart = (RA_cart * 255).astype('uint8')
 
         # 保存你想要的
-        if not save_gif:
+        if save_data:
             image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.png"
             cv2.imwrite(image_path, RA_cart)
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
@@ -302,7 +309,6 @@ def visualize(result):
     ax.set_title(f"Timestamp: {t:.2f}s")
     # 毫米波雷达
     if plot_radar_pc:
-        ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[3], ms=2)
         static_idx = np.abs(mmwave_point_cloud[:, 2]) <= doppler_res
         dynamic_idx = np.abs(mmwave_point_cloud[:, 2]) > doppler_res
         ax.plot(mmwave_point_cloud[static_idx, 0], mmwave_point_cloud[static_idx, 1], color_panel[2], ms=2)
@@ -324,4 +330,5 @@ writergif = animation.PillowWriter(fps=10)
 if save_gif:
     gif_path = f"{out_path}/gifs/{file_name}.gif"
     ani.save(gif_path, writer=writergif)
-plt.show()
+else:
+    plt.show()
