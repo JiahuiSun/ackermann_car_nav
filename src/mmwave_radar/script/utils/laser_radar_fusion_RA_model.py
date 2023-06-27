@@ -294,10 +294,6 @@ def visualize(result):
             point_cloud_nlos[:, :2] = line_symmetry_point(far_wall, point_cloud_nlos[:, :2])
             ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[3], ms=2)
 
-        # 激光点云映射
-        flag = isin_triangle(barrier_corner, inter1, inter3, gt_center)
-        laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2) if flag and len(point_cloud_nlos) else laser_point_cloud2
-        
         # bounding box ground truth
         key_points, box_length, box_width = bounding_box2(laser_point_cloud2, delta_x=0.2, delta_y=0.1)
         # key_points, box_length, box_width = bounding_box(laser_point_cloud2, far_wall, delta_x=0.2, delta_y=0.1)
@@ -324,6 +320,8 @@ def visualize(result):
                 pred_center = np.array([
                     (xywh[0]-W)*range_res, xywh[1]*range_res
                 ])
+                if isin_triangle(symmtric_corner, inter2, inter1, pred_center):
+                    pred_center = line_symmetry_point(far_wall, pred_center)
                 half_h, half_w = xywh[3]*range_res / 2, xywh[2]*range_res / 2
                 # 平行于坐标轴
                 p1 = pred_center + np.array([half_w, half_h])

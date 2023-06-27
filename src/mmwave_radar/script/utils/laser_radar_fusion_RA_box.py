@@ -288,8 +288,8 @@ def visualize(result):
             ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[3], ms=2)
 
         # 激光点云映射
-        flag = isin_triangle(barrier_corner, inter1, inter3, gt_center)
-        laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2) if flag and len(point_cloud_nlos) else laser_point_cloud2
+        if isin_triangle(barrier_corner, inter1, inter3, gt_center) and len(point_cloud_nlos):
+            laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2)
         
         # bounding box ground truth
         key_points, box_length, box_width = bounding_box2(laser_point_cloud2, delta_x=0.2, delta_y=0.1)
