@@ -150,6 +150,29 @@ def parallel_line_distance(coef, dist):
     return [coef[0], t0], [coef[0], t1]
 
 
+def bounding_box2(laser_point_cloud, delta_x=0.1, delta_y=0.1, fixed=False):
+    if fixed:
+        max_x, min_x = np.max(laser_point_cloud[:, 0]), np.min(laser_point_cloud[:, 0])
+        max_y, min_y = np.max(laser_point_cloud[:, 1]), np.min(laser_point_cloud[:, 1])
+        box_center = np.array([(max_x+min_x)/2, (max_y+min_y)/2])
+        box_length, box_width = delta_x, delta_y
+        top_right = box_center + np.array([box_length/2, box_width/2])
+        bottom_right = box_center + np.array([box_length/2, -box_width/2])
+        bottom_left = box_center + np.array([-box_length/2, -box_width/2])
+        top_left = box_center + np.array([-box_length/2, box_width/2])
+    else:
+        max_x, min_x = np.max(laser_point_cloud[:, 0]), np.min(laser_point_cloud[:, 0])
+        max_y, min_y = np.max(laser_point_cloud[:, 1]), np.min(laser_point_cloud[:, 1])
+        top_right = np.array([max_x+delta_x, max_y+delta_y])
+        bottom_right = np.array([max_x+delta_x, min_y-delta_y])
+        bottom_left = np.array([min_x-delta_x, min_y-delta_y])
+        top_left = np.array([min_x-delta_x, max_y+delta_y])
+        box_center = (top_right + bottom_left) / 2
+        box_length = top_right[0] - top_left[0]
+        box_width = top_right[1] - bottom_right[1]
+    return (box_center, top_right, bottom_right, bottom_left, top_left), box_length, box_width
+
+
 def bounding_box(laser_point_cloud, wall_coef, inter=None, theta=None, delta_x=0.10, delta_y=0.05):
     """给定一堆点，一条表示方向的线，找平行于该线的最小外接矩形
     Args:

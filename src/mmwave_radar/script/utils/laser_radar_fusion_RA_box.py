@@ -12,8 +12,9 @@ from music import aoa_music_1D_mat
 import pandas as pd
 import os
 import cv2
+import sys
 
-from nlos_sensing import transform, bounding_box, intersection_of_2line, isin_triangle
+from nlos_sensing import transform, bounding_box2, intersection_of_2line, isin_triangle
 from nlos_sensing import get_span, find_end_point, fit_line_ransac, line_by_coef_p
 from nlos_sensing import transform_inverse, line_symmetry_point, line_by_2p
 
@@ -137,10 +138,15 @@ def gen_point_cloud_plan3(adc_data):
     return bbox, point_cloud
 
 
-file_path = "/home/agent/Code/ackermann_car_nav/data/test_2023-06-26-14-38-10.pkl"
+if len(sys.argv) > 1:
+    file_path = sys.argv[1]
+    out_path = sys.argv[2]
+    mode = sys.argv[3]
+else:
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20230626/exp6_2023-06-26-19-52-03.pkl"
+    out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230626"
+    mode = "train"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
-out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230530"
-mode = "train"
 if not os.path.exists(f"{out_path}/images/{mode}"):
     os.makedirs(f"{out_path}/images/{mode}")
 if not os.path.exists(f"{out_path}/labels/{mode}"):
@@ -148,7 +154,7 @@ if not os.path.exists(f"{out_path}/labels/{mode}"):
 if not os.path.exists(f"{out_path}/gifs"):
     os.makedirs(f"{out_path}/gifs")
 save_gif = True
-save_data = False
+save_data = True
 plot_radar_pc = False
 cnt = 0
 local_sensing_range = [-0.5, 5, -3, 3]
@@ -267,7 +273,12 @@ def visualize(result):
     inter2 = intersection_of_2line(line_by_radar_and_corner, line_by_far_wall_and_symmtric_corner)
     inter3 = line_symmetry_point(far_wall, inter2)
     gt_center = np.mean(laser_point_cloud2, axis=0)
-    # 当人位于边界右边，开始预测
+    ax.plot(*inter1, color_panel[-2], ms=5)
+    ax.plot(*inter2, color_panel[-2], ms=5)
+    ax.plot(*inter3, color_panel[-2], ms=5)
+    ax.plot(*barrier_corner, color_panel[-2], ms=5)
+    ax.plot(*symmtric_corner, color_panel[-2], ms=5)
+    # 当人位于边界右边，开始保存数据
     if np.cross(inter3-inter1, gt_center-inter1) > 0:
         # 毫米波点云过滤和映射
         flag = isin_triangle(symmtric_corner, inter2, inter1, mmwave_point_cloud[:, :2])
@@ -278,9 +289,11 @@ def visualize(result):
 
         # 激光点云映射
         flag = isin_triangle(barrier_corner, inter1, inter3, gt_center)
-        laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2) if flag else laser_point_cloud2
+        laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2) if flag and len(point_cloud_nlos) else laser_point_cloud2
+        
         # bounding box ground truth
-        key_points, box_length, box_width = bounding_box(laser_point_cloud2, far_wall)
+        key_points, box_length, box_width = bounding_box2(laser_point_cloud2, delta_x=0.2, delta_y=0.1)
+        # key_points, box_length, box_width = bounding_box(laser_point_cloud2, far_wall, delta_x=0.2, delta_y=0.1)
         center, top_right, bottom_right, bottom_left, top_left = key_points
         x = [top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]
         y = [top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]
@@ -313,7 +326,7 @@ def visualize(result):
         dynamic_idx = np.abs(mmwave_point_cloud[:, 2]) > doppler_res
         ax.plot(mmwave_point_cloud[static_idx, 0], mmwave_point_cloud[static_idx, 1], color_panel[2], ms=2)
         ax.plot(mmwave_point_cloud[dynamic_idx, 0], mmwave_point_cloud[dynamic_idx, 1], color_panel[0], ms=2)
-        ax.plot(mmwave_pc[:, 0], mmwave_pc[:, 1], color_panel[4], ms=2)
+        # ax.plot(mmwave_pc[:, 0], mmwave_pc[:, 1], color_panel[4], ms=2)
     ax2.imshow(RA_cart[..., 0])
     # 激光雷达
     ax.plot(inlier_points1[:, 0], inlier_points1[:, 1], color_panel[1], ms=2)
