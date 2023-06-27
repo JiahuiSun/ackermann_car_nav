@@ -322,7 +322,7 @@ def visualize(result):
                 ])
                 if isin_triangle(symmtric_corner, inter2, inter1, pred_center):
                     pred_center = line_symmetry_point(far_wall, pred_center)
-                half_h, half_w = xywh[3]*range_res / 2, xywh[2]*range_res / 2
+                half_w, half_h = xywh[2]*range_res / 2, xywh[3]*range_res / 2
                 # 平行于坐标轴
                 p1 = pred_center + np.array([half_w, half_h])
                 p2 = pred_center + np.array([half_w, -half_h])
