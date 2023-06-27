@@ -17,7 +17,7 @@ import sys
 sys.path.append('/home/agent/Code/yolov5')
 from utils.general import non_max_suppression, xyxy2xywh
 
-from nlos_sensing import transform, bounding_box, intersection_of_2line, isin_triangle
+from nlos_sensing import transform, bounding_box, bounding_box2, intersection_of_2line, isin_triangle
 from nlos_sensing import get_span, find_end_point, fit_line_ransac, line_by_coef_p, line_by_vertical_coef_p
 from nlos_sensing import transform_inverse, parallel_line_distance, line_symmetry_point, line_by_2p
 
@@ -141,8 +141,15 @@ def gen_point_cloud_plan3(adc_data):
     return bbox, point_cloud
 
 
+if len(sys.argv) > 1:
+    file_path = sys.argv[1]
+    weights = sys.argv[2]
+    out_path = sys.argv[3]
+else:
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20230626/exp2_2023-06-26-19-46-27.pkl"
+    weights = "/home/agent/Code/yolov5/runs/train/exp6/weights/best.pt"
+    out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230626"
 # Model
-weights = "/home/agent/Code/yolov5/runs/train/exp/weights/best.pt"
 device = "cuda:0"
 model = torch.load(weights, map_location='cpu')
 model = model['model'].to(device).float()
@@ -151,21 +158,14 @@ conf_thres = 0.25
 iou_thres = 0.45
 max_det = 1000
 
-file_path = "/home/agent/Code/ackermann_car_nav/data/20230530/floor31_h1_120_L_120_angle_30_param1_2023-05-30-15-58-38.pkl"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
-out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230530"
-mode = "train"
-if not os.path.exists(f"{out_path}/images/{mode}"):
-    os.makedirs(f"{out_path}/images/{mode}")
-if not os.path.exists(f"{out_path}/labels/{mode}"):
-    os.makedirs(f"{out_path}/labels/{mode}")
 if not os.path.exists(f"{out_path}/gifs"):
     os.makedirs(f"{out_path}/gifs")
 save_gif = True
-plot_radar_pc = True
+plot_radar_pc = False
 cnt = 0
 local_sensing_range = [-0.5, 5, -3, 3]
-gt_range = [-8, 2, 0, 1.5]  # 切割人的点云
+gt_range = [-8, 0, -0.3, 1.5]  # 切割人的点云
 min_points_inline = 20
 min_length_inline = 0.6
 ransac_sigma = 0.02
@@ -203,6 +203,8 @@ def gen_data():
         flag_y = np.logical_and(laser_point_cloud[:, 1]>=local_sensing_range[2], laser_point_cloud[:, 1]<=local_sensing_range[3])
         flag = np.logical_and(flag_x, flag_y) 
         laser_point_cloud = laser_point_cloud[flag]
+        if len(laser_point_cloud) < 1:
+            continue
         # 小车->毫米波雷达
         laser_point_cloud = transform_inverse(laser_point_cloud, 0.17, 0, 90)
 
@@ -217,6 +219,8 @@ def gen_data():
         flag_y = np.logical_and(laser_pc2[:, 1]>=gt_range[2], laser_pc2[:, 1]<=gt_range[3])
         flag = np.logical_and(flag_x, flag_y) 
         laser_point_cloud2 = laser_pc2[flag]
+        if len(laser_point_cloud2) < 1:
+            continue
         # 标定激光雷达->小车坐标系->毫米波雷达坐标系
         laser_point_cloud2 = transform_inverse(laser_point_cloud2, inter[0], inter[1], 360-theta)
         laser_point_cloud2 = transform_inverse(laser_point_cloud2, 0.17, 0, 90)
@@ -276,6 +280,11 @@ def visualize(result):
     inter2 = intersection_of_2line(line_by_radar_and_corner, line_by_far_wall_and_symmtric_corner)
     inter3 = line_symmetry_point(far_wall, inter2)
     gt_center = np.mean(laser_point_cloud2, axis=0)
+    ax.plot(*inter1, color_panel[-2], ms=5)
+    ax.plot(*inter2, color_panel[-2], ms=5)
+    ax.plot(*inter3, color_panel[-2], ms=5)
+    ax.plot(*barrier_corner, color_panel[-2], ms=5)
+    ax.plot(*symmtric_corner, color_panel[-2], ms=5)
     # 当人位于边界右边，开始预测
     if np.cross(inter3-inter1, gt_center-inter1) > 0:
         # 毫米波点云过滤和映射
@@ -283,11 +292,15 @@ def visualize(result):
         point_cloud_nlos = mmwave_point_cloud[flag]
         if len(point_cloud_nlos):
             point_cloud_nlos[:, :2] = line_symmetry_point(far_wall, point_cloud_nlos[:, :2])
+            ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[3], ms=2)
+
         # 激光点云映射
         flag = isin_triangle(barrier_corner, inter1, inter3, gt_center)
-        laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2) if flag else laser_point_cloud2
+        laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2) if flag and len(point_cloud_nlos) else laser_point_cloud2
+        
         # bounding box ground truth
-        key_points, box_length, box_width = bounding_box(laser_point_cloud2, far_wall, delta_x=0, delta_y=0)
+        key_points, box_length, box_width = bounding_box2(laser_point_cloud2, delta_x=0.2, delta_y=0.1)
+        # key_points, box_length, box_width = bounding_box(laser_point_cloud2, far_wall, delta_x=0.2, delta_y=0.1)
         center, top_right, bottom_right, bottom_left, top_left = key_points
         x = [top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]
         y = [top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]
@@ -311,45 +324,35 @@ def visualize(result):
                 pred_center = np.array([
                     (xywh[0]-W)*range_res, xywh[1]*range_res
                 ])
-                # 距离中心点一半宽度的两条直线
                 half_h, half_w = xywh[3]*range_res / 2, xywh[2]*range_res / 2
-                pred_center_line = line_by_coef_p(far_wall, pred_center)
-                pred_center_line2 = line_by_vertical_coef_p(far_wall, pred_center)
-                pred_parallel_wall1, pred_parallel_wall2 = parallel_line_distance(pred_center_line, half_h)
-                pred_vertical_wall1, pred_vertical_wall2 = parallel_line_distance(pred_center_line2, half_w)
-                p1 = intersection_of_2line(pred_parallel_wall1, pred_vertical_wall1)
-                p2 = intersection_of_2line(pred_parallel_wall2, pred_vertical_wall1)
-                p3 = intersection_of_2line(pred_parallel_wall1, pred_vertical_wall2)
-                p4 = intersection_of_2line(pred_parallel_wall2, pred_vertical_wall2)
+                # 平行于坐标轴
+                p1 = pred_center + np.array([half_w, half_h])
+                p2 = pred_center + np.array([half_w, -half_h])
+                p4 = pred_center + np.array([-half_w, -half_h])
+                p3 = pred_center + np.array([-half_w, half_h])
+                # 平行于front wall
+                # pred_center_line = line_by_coef_p(far_wall, pred_center)
+                # pred_center_line2 = line_by_vertical_coef_p(far_wall, pred_center)
+                # pred_parallel_wall1, pred_parallel_wall2 = parallel_line_distance(pred_center_line, half_h)
+                # pred_vertical_wall1, pred_vertical_wall2 = parallel_line_distance(pred_center_line2, half_w)
+                # p1 = intersection_of_2line(pred_parallel_wall1, pred_vertical_wall1)
+                # p2 = intersection_of_2line(pred_parallel_wall2, pred_vertical_wall1)
+                # p3 = intersection_of_2line(pred_parallel_wall1, pred_vertical_wall2)
+                # p4 = intersection_of_2line(pred_parallel_wall2, pred_vertical_wall2)
                 x = [p1[0], p2[0], p4[0], p3[0], p1[0]]
                 y = [p1[1], p2[1], p4[1], p3[1], p1[1]]
                 ax.plot(x, y, 'g-', lw=1)
                 ax.plot(*pred_center, color_panel[1], ms=2)
 
-        # 保存你想要的
-        if not save_gif:
-            image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.png"
-            cv2.imwrite(image_path, RA_cart)
-            txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
-            fwrite = open(txt_path, 'w')
-            cnt += 1
-            x_norm = (center[0]+W*range_res) / (W*2*range_res)
-            y_norm = center[1] / (W*range_res)
-            length_norm = box_length / (W*2*range_res)
-            width_norm = box_width / (W*range_res)
-            fwrite.write(f"0 {x_norm} {y_norm} {length_norm} {width_norm}\n")
-            fwrite.close()
-
     # 可视化所有结果
     ax.set_title(f"Timestamp: {t:.2f}s")
     # 毫米波雷达
     if plot_radar_pc:
-        ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[3], ms=2)
         static_idx = np.abs(mmwave_point_cloud[:, 2]) <= doppler_res
         dynamic_idx = np.abs(mmwave_point_cloud[:, 2]) > doppler_res
         ax.plot(mmwave_point_cloud[static_idx, 0], mmwave_point_cloud[static_idx, 1], color_panel[2], ms=2)
         ax.plot(mmwave_point_cloud[dynamic_idx, 0], mmwave_point_cloud[dynamic_idx, 1], color_panel[0], ms=2)
-        ax.plot(mmwave_pc[:, 0], mmwave_pc[:, 1], color_panel[4], ms=2)
+        # ax.plot(mmwave_pc[:, 0], mmwave_pc[:, 1], color_panel[4], ms=2)
     ax2.imshow(RA_cart[..., 0])
     # 激光雷达
     ax.plot(inlier_points1[:, 0], inlier_points1[:, 1], color_panel[1], ms=2)
