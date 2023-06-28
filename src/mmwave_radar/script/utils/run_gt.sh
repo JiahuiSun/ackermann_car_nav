@@ -7,12 +7,12 @@ python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/202
 python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp14_2023-06-26-20-02-19.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 train
 python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp16_2023-06-26-20-03-59.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 train
 python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp18_2023-06-26-20-05-34.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 train
-python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp17_2023-06-26-20-04-43.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 train
+python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp11_2023-06-26-19-58-21.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 train
 python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp1_2023-06-26-19-45-34.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 train
 
 python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp3_2023-06-26-19-47-15.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 val
 python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp7_2023-06-26-19-54-52.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 val
-python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp11_2023-06-26-19-58-21.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 val
+python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp17_2023-06-26-20-04-43.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 val
 
 python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp5_2023-06-26-19-51-18.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 test
 python3 laser_radar_fusion_RA_box.py /home/agent/Code/ackermann_car_nav/data/20230626/exp9_2023-06-26-19-56-23.pkl /home/agent/Code/ackermann_car_nav/data/data_20230626 test

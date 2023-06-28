@@ -292,7 +292,7 @@ def visualize(result):
             laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2)
         
         # bounding box ground truth
-        key_points, box_length, box_width = bounding_box2(laser_point_cloud2, delta_x=0.2, delta_y=0.1)
+        key_points, box_length, box_width = bounding_box2(laser_point_cloud2, delta_x=0.1, delta_y=0.1)
         # key_points, box_length, box_width = bounding_box(laser_point_cloud2, far_wall, delta_x=0.2, delta_y=0.1)
         center, top_right, bottom_right, bottom_left, top_left = key_points
         x = [top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]
