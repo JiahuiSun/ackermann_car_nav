@@ -13,21 +13,21 @@ line, = ax.plot([], [], 'ro', ms=2)
 def init_fig():
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
-    ax.set_xlim([-5, 5])
-    ax.set_ylim([-5, 5])
+    ax.set_xlim([-3, -2])
+    ax.set_ylim([-3, -1])
     return line
 
 def gen_data():
     for topic, msg, t in rosbag.Bag(
-        "/home/dingrong/Code/ackermann_car_nav/data/floor3_static_2023-05-16-17-46-00.bag", 'r'):
-        if topic == '/laser_point_cloud':
+        "/home/dingrong/Desktop/exp1_mid_2023-09-19-22-38-14.bag", 'r'):
+        if topic == '/laser_point_cloud2':
             points = point_cloud2.read_points_list(
                 msg, field_names=['x', 'y']
             )
             x_pos = [p.x for p in points]
             y_pos = [p.y for p in points]
             point_cloud = np.array([x_pos, y_pos]).T
-            point_cloud = transform(point_cloud, 0.08, 0, 90)
+            # point_cloud = transform(point_cloud, 0.08, 0, 90)
             yield point_cloud, msg.header.seq
 
 def visualize(result):
