@@ -143,8 +143,8 @@ if len(sys.argv) > 1:
     out_path = sys.argv[2]
     mode = sys.argv[3]
 else:
-    file_path = "/home/agent/Code/ackermann_car_nav/data/20230626/exp6_2023-06-26-19-52-03.pkl"
-    out_path = "/home/agent/Code/ackermann_car_nav/data/data_20230626"
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A_2023-10-01-20-21-03.pkl"
+    out_path = "/home/agent/Code/ackermann_car_nav/data/20231002"
     mode = "train"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
 if not os.path.exists(f"{out_path}/images/{mode}"):
@@ -155,10 +155,12 @@ if not os.path.exists(f"{out_path}/gifs"):
     os.makedirs(f"{out_path}/gifs")
 save_gif = True
 save_data = True
-plot_radar_pc = False
+plot_radar_pc = True
 cnt = 0
-local_sensing_range = [-0.5, 5, -3, 3]
+local_sensing_range = [-0.5, 5, -3, 3]  # 切割小车周围点云
 gt_range = [-8, 0, -0.3, 1.5]  # 切割人的点云
+min_onboard_laser_point_num = 20
+min_GT_laser_point_num = 4
 min_points_inline = 20
 min_length_inline = 0.6
 ransac_sigma = 0.02
@@ -196,7 +198,7 @@ def gen_data():
         flag_y = np.logical_and(laser_point_cloud[:, 1]>=local_sensing_range[2], laser_point_cloud[:, 1]<=local_sensing_range[3])
         flag = np.logical_and(flag_x, flag_y) 
         laser_point_cloud = laser_point_cloud[flag]
-        if len(laser_point_cloud) < 1:
+        if len(laser_point_cloud) < min_onboard_laser_point_num:
             continue
         # 小车->毫米波雷达
         laser_point_cloud = transform_inverse(laser_point_cloud, 0.17, 0, 90)
@@ -212,18 +214,18 @@ def gen_data():
         flag_y = np.logical_and(laser_pc2[:, 1]>=gt_range[2], laser_pc2[:, 1]<=gt_range[3])
         flag = np.logical_and(flag_x, flag_y) 
         laser_point_cloud2 = laser_pc2[flag]
-        if len(laser_point_cloud2) < 1:
+        if len(laser_point_cloud2) < min_GT_laser_point_num:
             continue
         # 标定激光雷达->小车坐标系->毫米波雷达坐标系
         laser_point_cloud2 = transform_inverse(laser_point_cloud2, inter[0], inter[1], 360-theta)
         laser_point_cloud2 = transform_inverse(laser_point_cloud2, 0.17, 0, 90)
-        yield t, laser_point_cloud2, laser_point_cloud, RA_cart, mmwave_point_cloud, mmwave_pc
+        yield t, laser_point_cloud2, laser_point_cloud, RA_cart, mmwave_point_cloud
 
 
 def visualize(result):
     global cnt
     init_fig()
-    t, laser_point_cloud2, laser_point_cloud, RA_cart, mmwave_point_cloud, mmwave_pc = result
+    t, laser_point_cloud2, laser_point_cloud, RA_cart, mmwave_point_cloud = result
 
     # 提取墙面
     fitted_lines = []
@@ -265,38 +267,42 @@ def visualize(result):
         barrier_wall = coef1
         barrier_corner = find_end_point(inlier_points1, 1)[1]
         barrier_corner = np.array(barrier_corner)
-
     symmtric_corner = line_symmetry_point(far_wall, barrier_corner)
     line_by_radar_and_corner = line_by_2p(np.array([0, 0]), barrier_corner)
     line_by_far_wall_and_symmtric_corner = line_by_coef_p(far_wall, symmtric_corner)
     inter1 = intersection_of_2line(line_by_radar_and_corner, far_wall)
     inter2 = intersection_of_2line(line_by_radar_and_corner, line_by_far_wall_and_symmtric_corner)
     inter3 = line_symmetry_point(far_wall, inter2)
-    gt_center = np.mean(laser_point_cloud2, axis=0)
     ax.plot(*inter1, color_panel[-2], ms=5)
     ax.plot(*inter2, color_panel[-2], ms=5)
     ax.plot(*inter3, color_panel[-2], ms=5)
     ax.plot(*barrier_corner, color_panel[-2], ms=5)
     ax.plot(*symmtric_corner, color_panel[-2], ms=5)
-    # 当人位于边界右边，开始保存数据
-    if np.cross(inter3-inter1, gt_center-inter1) > 0:
-        # 毫米波点云过滤和映射
+
+    # 原来是用激光点云平均值，这个是不准确的，应该是中心点
+    key_points, box_length, box_width = bounding_box2(laser_point_cloud2, delta_x=0.1, delta_y=0.1)
+    gt_center = key_points[0]
+    # 当人位于NLOS区域内，开始保存数据
+    if isin_triangle(barrier_corner, inter1, inter3, gt_center):
+        # 毫米波点云过滤
         flag = isin_triangle(symmtric_corner, inter2, inter1, mmwave_point_cloud[:, :2])
         point_cloud_nlos = mmwave_point_cloud[flag]
-        if len(point_cloud_nlos):
-            point_cloud_nlos[:, :2] = line_symmetry_point(far_wall, point_cloud_nlos[:, :2])
-            ax.plot(point_cloud_nlos[:, 0], point_cloud_nlos[:, 1], color_panel[3], ms=2)
 
         # 激光点云映射
-        if isin_triangle(barrier_corner, inter1, inter3, gt_center) and len(point_cloud_nlos):
-            laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2)
-        
+        laser_point_cloud2 = line_symmetry_point(far_wall, laser_point_cloud2)
         # bounding box ground truth
         key_points, box_length, box_width = bounding_box2(laser_point_cloud2, delta_x=0.1, delta_y=0.1)
-        # key_points, box_length, box_width = bounding_box(laser_point_cloud2, far_wall, delta_x=0.2, delta_y=0.1)
         center, top_right, bottom_right, bottom_left, top_left = key_points
-        x = [top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]
-        y = [top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]
+        # 激光点云纠偏，直接将人的中心移动到毫米波点云中心
+        delta = [0, 0]
+        if len(point_cloud_nlos):
+            delta = np.mean(point_cloud_nlos[:, :2], axis=0) - center
+            center += delta
+        # 防止center出界
+        center[0] = np.clip(center[0], -(W-1)*range_res, (W-1)*range_res)
+        center[1] = np.clip(center[1], 0, (W-1)*range_res)
+        x = np.array([top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]) + delta[0]
+        y = np.array([top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]) + delta[1]
         ax.plot(x, y, 'k-', lw=1)
         ax.plot(*center, color_panel[-1], ms=2)
 
@@ -326,18 +332,16 @@ def visualize(result):
         dynamic_idx = np.abs(mmwave_point_cloud[:, 2]) > doppler_res
         ax.plot(mmwave_point_cloud[static_idx, 0], mmwave_point_cloud[static_idx, 1], color_panel[2], ms=2)
         ax.plot(mmwave_point_cloud[dynamic_idx, 0], mmwave_point_cloud[dynamic_idx, 1], color_panel[0], ms=2)
-        # ax.plot(mmwave_pc[:, 0], mmwave_pc[:, 1], color_panel[4], ms=2)
     ax2.imshow(RA_cart[..., 0])
     # 激光雷达
     ax.plot(inlier_points1[:, 0], inlier_points1[:, 1], color_panel[1], ms=2)
     ax.plot(inlier_points2[:, 0], inlier_points2[:, 1], color_panel[1], ms=2)
-    ax.plot(laser_point_cloud[:, 0], laser_point_cloud[:, 1], color_panel[1], ms=2)
     ax.plot(laser_point_cloud2[:, 0], laser_point_cloud2[:, 1], color_panel[-1], ms=2)
 
 
 ani = animation.FuncAnimation(
-    fig, visualize, gen_data, interval=200,
-    init_func=init_fig, repeat=False, save_count=500
+    fig, visualize, gen_data, interval=100,
+    init_func=init_fig, repeat=False, save_count=1000
 )
 writergif = animation.PillowWriter(fps=10)
 if save_gif:
