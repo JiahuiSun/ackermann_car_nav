@@ -156,6 +156,7 @@ if not os.path.exists(f"{out_path}/gifs"):
 save_gif = True
 save_data = True
 plot_radar_pc = True
+img_fmt = False
 cnt = 0
 local_sensing_range = [-0.5, 5, -3, 3]  # 切割小车周围点云
 gt_range = [-8, 0, -0.3, 1.5]  # 切割人的点云
@@ -306,14 +307,16 @@ def visualize(result):
         ax.plot(x, y, 'k-', lw=1)
         ax.plot(*center, color_panel[-1], ms=2)
 
-        # Image
-        RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
-        RA_cart = (RA_cart * 255).astype('uint8')
-
         # 保存你想要的
         if save_data:
-            image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.png"
-            cv2.imwrite(image_path, RA_cart)
+            if img_fmt:
+                RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
+                RA_cart = (RA_cart * 255).astype('uint8')
+                image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.png"
+                cv2.imwrite(image_path, RA_cart)
+            else:
+                image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.npy"
+                np.save(image_path, RA_cart)
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
             fwrite = open(txt_path, 'w')
             cnt += 1
