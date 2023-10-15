@@ -8,7 +8,7 @@ from nlos_sensing import intersection_of_2line, line_by_vertical_coef_p, paralle
 
 
 ## 读取数据
-file_path = "/home/dingrong/Desktop/exp2_mid_2023-09-19-22-42-47"
+file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-F_2023-10-01-20-39-52"
 bag = rosbag.Bag(f"{file_path}.bag")
 bag_data = bag.read_messages(topics=['/laser_point_cloud', '/laser_point_cloud2', '/mmwave_radar_point_cloud', '/mmwave_radar_raw_data'])
 frame_bytes = 196608
@@ -66,7 +66,7 @@ ax.plot(laser_t, np.ones(len(laser_t))*1.2, 'og', ms=0.5)
 ax.plot(laser_stamp, np.ones(len(laser_stamp))*1.8, 'og', ms=0.5)
 ax.plot(laser2_t, np.ones(len(laser2_t))*1.3, 'ok', ms=0.5)
 ax.plot(laser2_stamp, np.ones(len(laser2_stamp))*1.7, 'ok', ms=0.5)
-plt.show()
+fig.savefig(f"{file_path}-orignal-stamp.png", dpi=100)
 
 ## 时间对齐
 def align(list1, list2, k=0, j=0):
@@ -91,30 +91,20 @@ def align(list1, list2, k=0, j=0):
     len_min = min(len(list1), len(list2))
     return list1[:len_min], list2[:len_min], minv, mini
 
+# TODO: 第一次的做法存在问题：3是最早开始的，0是最晚结束的，二者都长为1003，对齐后也为1003
+# 用3对齐1和2；1也为1003，对齐后仍为1003；2为1001，对齐后3和2变成1000；所以最终长度为1003、1003、1000、1000
+# 正确的逻辑：如果所有人长度一致，停止；先用最短的list对齐所有人；否则再找到最短的list，对齐所有人；
+# 这也不对吧？都一样长不代表就对齐了，比如时间恰好错开几个stamp；不是有图吗？通过肉眼判断吧
 data_list = [mmwave_list, mmwave_raw_list, laser_list, laser_list2]
-# 找到最早开始最晚结束的两个人进行align，这样一定是最短的
-latest_begin = np.argmax([
-    mmwave_stamp[0], mmwave_raw_stamp[0], laser_stamp[0], laser2_stamp[0]
-])
-earliest_end = np.argmin([
-    mmwave_stamp[-1], mmwave_raw_stamp[-1], laser_stamp[-1], laser2_stamp[-1]
-])
-print(latest_begin, earliest_end)
-# 如果是同一个人最晚开始最早结束
-if latest_begin == earliest_end:
-    pivot = latest_begin
+while True:
+    data_len = np.array([len(x) for x in data_list])
+    stop = np.array([data_len[0] == x for x in data_len])
+    if stop.all():
+        break
+    shortest_list = np.argmin(data_len)
     for i in range(len(data_list)):
-        if i == pivot:
-            continue
-        data_list[i], data_list[pivot], _, _ = align(data_list[i], data_list[pivot], k=1, j=1)
-else:
-    data_list[latest_begin], data_list[earliest_end], _, _ = align(data_list[latest_begin], data_list[earliest_end], k=1, j=1)
-    pivot = latest_begin
-    for i in range(len(data_list)):
-        if i in [latest_begin, earliest_end]:
-            continue
-        else:
-            data_list[i], data_list[pivot], _, _ = align(data_list[i], data_list[pivot], k=1, j=1)
+        if i != shortest_list:
+            data_list[i], data_list[shortest_list], _, _ = align(data_list[i], data_list[shortest_list], k=1, j=1)
 mmwave_list, mmwave_raw_list, laser_list, laser_list2 = data_list
 print(len(mmwave_list), len(mmwave_raw_list), len(laser_list), len(laser_list2))
 
@@ -135,22 +125,21 @@ ax.plot(laser_t, np.ones(len(laser_t))*1.2, 'og', ms=0.5)
 ax.plot(laser_stamp, np.ones(len(laser_stamp))*1.8, 'og', ms=0.5)
 ax.plot(laser2_t, np.ones(len(laser2_t))*1.3, 'ok', ms=0.5)
 ax.plot(laser2_stamp, np.ones(len(laser2_stamp))*1.7, 'ok', ms=0.5)
-plt.show()
+fig.savefig(f"{file_path}-temporal-align.png", dpi=100)
 
 
 ## 空间对齐
-# 难点在于：原来用小车的4条腿来提取小车位姿，但腿太细导致点太少，只用1帧几乎无法提取小车位姿，小车不动还可以把多帧叠加，一旦运动起来就只能靠1帧的点云
-# 因此我想通过面来检测，而不是腿，此时存在的问题是：在有些角度，面上的点也很少
-local_sensing_range = [-3, -2, -3, -1]  # TODO: xxyy切割小车，只保留小车的点云；先用parse_laser_pc_bag.py看一下怎么切割
+# 提取小车坐标系相对GT激光雷达坐标系的坐标变换，因为小车可能是运动的，所以每一帧提取一次相对位姿
+local_sensing_range = [-2.1, 0, -3, 0]  # TODO: xxyy切割小车，只保留小车的点云；先用parse_laser_pc_bag.py看一下怎么切割
 
 all_point_cloud = []
 for i in range(len(laser_list2)):
     # 用laser2提取小车位姿
-    laser_n_frame = laser_list2[i][2]
-    flag_x = np.logical_and(laser_n_frame[:, 0]>=local_sensing_range[0], laser_n_frame[:, 0]<=local_sensing_range[1])
-    flag_y = np.logical_and(laser_n_frame[:, 1]>=local_sensing_range[2], laser_n_frame[:, 1]<=local_sensing_range[3])
+    laser_frame = laser_list2[i][2]
+    flag_x = np.logical_and(laser_frame[:, 0]>=local_sensing_range[0], laser_frame[:, 0]<=local_sensing_range[1])
+    flag_y = np.logical_and(laser_frame[:, 1]>=local_sensing_range[2], laser_frame[:, 1]<=local_sensing_range[3])
     flag = np.logical_and(flag_x, flag_y)
-    laser_part = laser_n_frame[flag]
+    laser_part = laser_frame[flag]
 
     # 提取小车的面的直线
     ransac_sigma = 0.02

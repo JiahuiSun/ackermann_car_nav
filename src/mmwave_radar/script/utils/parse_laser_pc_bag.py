@@ -8,18 +8,19 @@ from nlos_sensing import transform
 
 fig, ax = plt.subplots(figsize=(8, 8))
 line, = ax.plot([], [], 'ro', ms=2)
+file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-F_2023-10-01-20-39-52"
 
-
+# 这个脚本用来大致看一眼GT激光雷达点云，从而切割人和小车
 def init_fig():
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
-    ax.set_xlim([-3, -2])
-    ax.set_ylim([-3, -1])
+    ax.set_xlim([-7, 0])
+    ax.set_ylim([-3, 2])
     return line
 
 def gen_data():
     for topic, msg, t in rosbag.Bag(
-        "/home/dingrong/Desktop/exp1_mid_2023-09-19-22-38-14.bag", 'r'):
+        f"{file_path}.bag", 'r'):
         if topic == '/laser_point_cloud2':
             points = point_cloud2.read_points_list(
                 msg, field_names=['x', 'y']
@@ -38,7 +39,7 @@ def visualize(result):
 
 ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
-    init_func=init_fig, repeat=False
+    init_func=init_fig, repeat=False, save_count=2000
 )
-# ani.save("plan1-2.gif", writer='imagemagick')
-plt.show()
+ani.save(f"{file_path}-gt.gif", writer='pillow')
+# plt.show()
