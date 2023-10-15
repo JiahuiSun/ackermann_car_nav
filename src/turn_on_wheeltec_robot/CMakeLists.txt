@@ -36,3 +36,12 @@ include_directories(include/${PROJECT_NAME})
 
 add_executable(wheeltec_robot_node src/wheeltec_robot.cpp src/Quaternion_Solution.cpp)
 target_link_libraries(wheeltec_robot_node ${catkin_LIBRARIES})
+
+## Mark executable scripts (Python etc.) for installation
+## in contrast to setup.py, you can choose the destination
+catkin_install_python(PROGRAMS
+  scripts/deploy.py
+  scripts/train/network.py
+  scripts/train/utils.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
