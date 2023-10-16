@@ -36,3 +36,5 @@
 build/
 devel/
 data/
+src/turn_on_wheeltec_robot/scripts/train/output_radar/
+src/turn_on_wheeltec_robot/scripts/actor.pth
