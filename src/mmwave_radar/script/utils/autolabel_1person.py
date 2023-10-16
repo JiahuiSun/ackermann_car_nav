@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from matplotlib import rcParams
 rcParams['font.family'] = 'serif'
 rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
@@ -150,8 +151,8 @@ def visualize(result):
     # 原来是用激光点云平均值，这个是不准确的，应该是中心点
     key_points, _ = bounding_box2(laser_pc_person, delta_x=0.1, delta_y=0.1)
     gt_center = key_points[0]
-    # 当人位于NLOS区域内，开始保存数据
-    if isin_triangle(barrier_corner, inter1, inter3, gt_center):
+    # 只要人进入NLOS就保存数据
+    if np.cross(inter3-inter1, gt_center-inter1) > 0:
         # 毫米波点云过滤
         flag = isin_triangle(symmtric_corner, inter2, inter1, mmwave_point_cloud[:, :2])
         point_cloud_nlos = mmwave_point_cloud[flag]
@@ -160,19 +161,15 @@ def visualize(result):
         laser_pc_person = line_symmetry_point(far_wall, laser_pc_person)
         # bounding box ground truth
         key_points, box_hw = bounding_box2(laser_pc_person, delta_x=0.1, delta_y=0.1)
-        center, top_right, bottom_right, bottom_left, top_left = key_points
         # 激光点云纠偏，直接将人的中心移动到毫米波点云中心
-        delta = [0, 0]
-        if len(point_cloud_nlos):
-            delta = np.mean(point_cloud_nlos[:, :2], axis=0) - center
-            center += delta
+        if len(point_cloud_nlos) and isin_triangle(barrier_corner, inter1, inter3, gt_center):
+            key_points[0] = np.mean(point_cloud_nlos[:, :2], axis=0)
         # 防止center出界
-        center[0] = np.clip(center[0], -(H-1)*range_res, (H-1)*range_res)
-        center[1] = np.clip(center[1], 0, (H-1)*range_res)
-        x = np.array([top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]) + delta[0]
-        y = np.array([top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]) + delta[1]
-        ax1.plot(x, y, 'k-', lw=1)
-        ax1.plot(*center, color_panel[-1], ms=2)
+        key_points[0, 0] = np.clip(key_points[0, 0], -(H-1)*range_res, (H-1)*range_res)
+        key_points[0, 1] = np.clip(key_points[0, 1], 0, (H-1)*range_res)
+        ax1.plot(*key_points[0], color_panel[-1], ms=2)
+        rect = patches.Rectangle(key_points[3], box_hw[1], box_hw[0], linewidth=1, edgecolor='k', facecolor='none')
+        ax1.add_patch(rect)
 
         # 保存你想要的
         if save_data:
@@ -187,8 +184,8 @@ def visualize(result):
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
             fwrite = open(txt_path, 'w')
             cnt += 1
-            x_norm = (center[0]+H*range_res) / (H*2*range_res)
-            y_norm = center[1] / (H*range_res)
+            x_norm = (key_points[0, 0]+H*range_res) / (H*2*range_res)
+            y_norm = key_points[0, 1] / (H*range_res)
             width_norm = box_hw[1] / (H*2*range_res)
             height_norm = box_hw[0] / (H*range_res)
             fwrite.write(f"0 {x_norm} {y_norm} {width_norm} {height_norm}\n")
