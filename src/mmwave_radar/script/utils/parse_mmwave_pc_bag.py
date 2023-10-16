@@ -1,27 +1,43 @@
 import numpy as np
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from nlos_sensing import transform
 import rosbag
 from sensor_msgs import point_cloud2
+import struct
+
+from radar_fft_music_RA import *
 
 
-fig, ax = plt.subplots(figsize=(10, 4))
-line0, = ax.plot([], [], 'ob', ms=2)
-line1, = ax.plot([], [], 'or', ms=2)
-lines = [line0, line1]
+file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-C3_2023-10-01-21-30-52"
+fig, ax = plt.subplots(figsize=(8, 8))
+color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'mo', 'ko']
 
 
 def init_fig():
+    ax.clear()
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
     ax.set_xlim([-5, 5])
     ax.set_ylim([0, 10])
-    return lines
+    ax.tick_params(direction='in')
+
 
 def gen_data():
     for topic, msg, t in rosbag.Bag(
-        "/home/dingrong/Code/ackermann_car_nav/data/person_2023-05-11-13-11-47.bag", 'r'):
+        f"{file_path}.bag", 'r'):
+        if topic == '/mmwave_radar_raw_data':
+            adc_pack = struct.pack(f">{frame_bytes}b", *msg.data)
+            adc_unpack = np.frombuffer(adc_pack, dtype=np.int16)
+            result = gen_point_cloud_plan3(adc_unpack)
+            if result is None:
+                continue
+            RA_cart, mmwave_point_cloud = result
+            yield mmwave_point_cloud, msg.header.seq
+
+
+def gen_data_old():
+    for topic, msg, t in rosbag.Bag(
+        f"{file_path}.bag", 'r'):
         if topic == '/mmwave_radar_point_cloud':
             points = point_cloud2.read_points_list(
                 msg, field_names=['x', 'y', 'z', 'vel']
@@ -31,23 +47,23 @@ def gen_data():
             z_pos = [p.z for p in points]
             vel = [p.vel for p in points]
             point_cloud = np.array([x_pos, y_pos, z_pos, vel]).T
-            # 我坐标变换没有错，小车的坐标系是车头是x轴正方向，而我画图的坐标系是向右是x轴正方向，难怪变化330度就对了！
-            point_cloud[:, :2] = transform(point_cloud[:, :2], -0.043, 0.13, 330)
             yield point_cloud, msg.header.seq
 
+
 def visualize(result):
-    adc_data, seq = result
-    x_pos, y_pos, dopplers = adc_data[:, 0], adc_data[:, 1], adc_data[:, -1]
-    static_idx = dopplers == 0
-    dynamic_idx = dopplers != 0
+    init_fig()
+    mmwave_pc, seq = result
+    x_pos, y_pos, dopplers = mmwave_pc[:, 0], mmwave_pc[:, 1], mmwave_pc[:, 2]
+    static_idx = dopplers <= range_res
+    dynamic_idx = dopplers > range_res
     ax.set_title(f"frame id: {seq}")
-    lines[0].set_data(x_pos[static_idx], y_pos[static_idx])
-    lines[1].set_data(x_pos[dynamic_idx], y_pos[dynamic_idx])
+    ax.plot(x_pos[static_idx], y_pos[static_idx], color_panel[2], ms=2)
+    ax.plot(x_pos[dynamic_idx], y_pos[dynamic_idx], color_panel[0], ms=2)
 
 
 ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
-    init_func=init_fig, repeat=False, save_count=100
+    init_func=init_fig, repeat=False, save_count=1000
 )
-# ani.save("plan1-2.gif", writer='imagemagick')
-plt.show()
+ani.save(f"{file_path}-mmwave_pc.gif", writer='pillow')
+# plt.show()

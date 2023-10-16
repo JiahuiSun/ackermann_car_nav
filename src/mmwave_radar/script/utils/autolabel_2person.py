@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from matplotlib import rcParams
 rcParams['font.family'] = 'serif'
 rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
@@ -21,8 +22,8 @@ if len(sys.argv) > 1:
     out_path = sys.argv[2]
     mode = sys.argv[3]
 else:
-    file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A_2023-10-01-20-21-03.pkl"
-    out_path = "/home/agent/Code/ackermann_car_nav/data/20231002"
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-C3_2023-10-01-21-30-52.pkl"
+    out_path = "/home/agent/Code/ackermann_car_nav/data/20231015"
     mode = "train"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
 os.makedirs(f"{out_path}/images/{mode}", exist_ok=True)
@@ -61,13 +62,13 @@ def init_fig():
 def gen_data():
     with open(file_path, 'rb') as f:
         all_point_cloud = pickle.load(f)
-    for t, laser_pc_onboard, laser_pc_person, mmwave_pc, mmwave_raw_data, trans in all_point_cloud:
+    for t, laser_pc, laser_pc_person1, laser_pc_person2, mmwave_pc, mmwave_raw_data, trans in all_point_cloud:
         inter, theta = trans
         theta = theta * 180 / np.pi
         
         # 小车激光雷达只保留小车附近的点
         # 激光雷达->小车
-        laser_pc_onboard = transform(laser_pc_onboard, 0.08, 0, 180)
+        laser_pc_onboard = transform(laser_pc, 0.08, 0, 180)
         laser_pc_onboard = pc_filter(laser_pc_onboard, *local_sensing_range)
         if len(laser_pc_onboard) < min_onboard_laser_point_num:
             continue
@@ -80,20 +81,24 @@ def gen_data():
             continue
         RA_cart, mmwave_point_cloud = result
 
-        if len(laser_pc_person) < min_GT_laser_point_num:
+        if len(laser_pc_person1) < min_GT_laser_point_num or len(laser_pc_person2) < min_GT_laser_point_num:
             continue
         # 标定激光雷达->小车坐标系->毫米波雷达坐标系
-        laser_pc_person = transform_inverse(
-            transform_inverse(laser_pc_person, inter[0], inter[1], 360-theta), 
+        laser_pc_person1 = transform_inverse(
+            transform_inverse(laser_pc_person1, inter[0], inter[1], 360-theta), 
             0.17, 0, 90
         )
-        yield t, laser_pc_person, laser_pc_onboard, RA_cart, mmwave_point_cloud
+        laser_pc_person2 = transform_inverse(
+            transform_inverse(laser_pc_person2, inter[0], inter[1], 360-theta), 
+            0.17, 0, 90
+        )
+        yield t, laser_pc_person1, laser_pc_person2, laser_pc_onboard, RA_cart, mmwave_point_cloud
 
 
 def visualize(result):
     global cnt
     init_fig()
-    t, laser_pc_person, laser_pc_onboard, RA_cart, mmwave_point_cloud = result
+    t, laser_pc_person1, laser_pc_person2, laser_pc_onboard, RA_cart, mmwave_point_cloud = result
 
     # 提取墙面
     fitted_lines = []
@@ -148,31 +153,41 @@ def visualize(result):
     ax1.plot(*symmtric_corner, color_panel[-2], ms=5)
 
     # 原来是用激光点云平均值，这个是不准确的，应该是中心点
-    key_points, _ = bounding_box2(laser_pc_person, delta_x=0.1, delta_y=0.1)
-    gt_center = key_points[0]
-    # 当人位于NLOS区域内，开始保存数据
-    if isin_triangle(barrier_corner, inter1, inter3, gt_center):
+    key_points1, _ = bounding_box2(laser_pc_person1, delta_x=0.1, delta_y=0.1)
+    person1_center = key_points1[0]
+    is_begin_nlos1 = np.cross(inter3-inter1, person1_center-inter1) > 0
+    key_points2, _ = bounding_box2(laser_pc_person2, delta_x=0.1, delta_y=0.1)
+    person2_center = key_points2[0]
+    is_begin_nlos2 = np.cross(inter3-inter1, person2_center-inter1) > 0
+    # 当有人进入NLOS区域内，开始保存数据
+    if is_begin_nlos1 or is_begin_nlos2:
         # 毫米波点云过滤
         flag = isin_triangle(symmtric_corner, inter2, inter1, mmwave_point_cloud[:, :2])
         point_cloud_nlos = mmwave_point_cloud[flag]
 
         # 激光点云映射
-        laser_pc_person = line_symmetry_point(far_wall, laser_pc_person)
+        if isin_triangle(barrier_corner, inter1, inter3, person1_center):
+            laser_pc_person1 = line_symmetry_point(far_wall, laser_pc_person1)
+        if isin_triangle(barrier_corner, inter1, inter3, person2_center):
+            laser_pc_person2 = line_symmetry_point(far_wall, laser_pc_person2)
+
         # bounding box ground truth
-        key_points, box_hw = bounding_box2(laser_pc_person, delta_x=0.1, delta_y=0.1)
-        center, top_right, bottom_right, bottom_left, top_left = key_points
-        # 激光点云纠偏，直接将人的中心移动到毫米波点云中心
-        delta = [0, 0]
-        if len(point_cloud_nlos):
-            delta = np.mean(point_cloud_nlos[:, :2], axis=0) - center
-            center += delta
+        key_points1, box_hw1 = bounding_box2(laser_pc_person1, delta_x=0.1, delta_y=0.1)
         # 防止center出界
-        center[0] = np.clip(center[0], -(H-1)*range_res, (H-1)*range_res)
-        center[1] = np.clip(center[1], 0, (H-1)*range_res)
-        x = np.array([top_right[0], bottom_right[0], bottom_left[0], top_left[0], top_right[0]]) + delta[0]
-        y = np.array([top_right[1], bottom_right[1], bottom_left[1], top_left[1], top_right[1]]) + delta[1]
-        ax1.plot(x, y, 'k-', lw=1)
-        ax1.plot(*center, color_panel[-1], ms=2)
+        key_points1[0, 0] = np.clip(key_points1[0, 0], -(H-1)*range_res, (H-1)*range_res)
+        key_points1[0, 1] = np.clip(key_points1[0, 1], 0, (H-1)*range_res)
+        ax1.plot(*key_points1[0], color_panel[-1], ms=2)
+        rect = patches.Rectangle(key_points1[3], box_hw1[1], box_hw1[0], linewidth=1, edgecolor='k', facecolor='none')
+        ax1.add_patch(rect)
+
+        # bounding box ground truth
+        key_points2, box_hw2 = bounding_box2(laser_pc_person2, delta_x=0.1, delta_y=0.1)
+        # 防止center出界
+        key_points2[0, 0] = np.clip(key_points2[0, 0], -(H-1)*range_res, (H-1)*range_res)
+        key_points2[0, 1] = np.clip(key_points2[0, 1], 0, (H-1)*range_res)
+        ax1.plot(*key_points2[0], color_panel[-1], ms=2)
+        rect = patches.Rectangle(key_points2[3], box_hw2[1], box_hw2[0], linewidth=1, edgecolor='k', facecolor='none')
+        ax1.add_patch(rect)
 
         # 保存你想要的
         if save_data:
@@ -187,11 +202,18 @@ def visualize(result):
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
             fwrite = open(txt_path, 'w')
             cnt += 1
-            x_norm = (center[0]+H*range_res) / (H*2*range_res)
-            y_norm = center[1] / (H*range_res)
-            width_norm = box_hw[1] / (H*2*range_res)
-            height_norm = box_hw[0] / (H*range_res)
-            fwrite.write(f"0 {x_norm} {y_norm} {width_norm} {height_norm}\n")
+            if is_begin_nlos1:
+                x_norm = (key_points1[0, 0]+H*range_res) / (H*2*range_res)
+                y_norm = key_points1[0, 1] / (H*range_res)
+                height_norm = box_hw1[0] / (H*range_res)
+                width_norm = box_hw1[1] / (H*2*range_res)
+                fwrite.write(f"0 {x_norm} {y_norm} {width_norm} {height_norm}\n")
+            if is_begin_nlos2:
+                x_norm = (key_points2[0, 0]+H*range_res) / (H*2*range_res)
+                y_norm = key_points2[0, 1] / (H*range_res)
+                height_norm = box_hw2[0] / (H*range_res)
+                width_norm = box_hw2[1] / (H*2*range_res)
+                fwrite.write(f"0 {x_norm} {y_norm} {width_norm} {height_norm}\n")
             fwrite.close()
 
     # 可视化所有点云
@@ -206,7 +228,8 @@ def visualize(result):
     # 激光雷达
     ax1.plot(inlier_points1[:, 0], inlier_points1[:, 1], color_panel[1], ms=2)
     ax1.plot(inlier_points2[:, 0], inlier_points2[:, 1], color_panel[1], ms=2)
-    ax1.plot(laser_pc_person[:, 0], laser_pc_person[:, 1], color_panel[-1], ms=2)
+    ax1.plot(laser_pc_person1[:, 0], laser_pc_person1[:, 1], color_panel[-1], ms=2)
+    ax1.plot(laser_pc_person2[:, 0], laser_pc_person2[:, 1], color_panel[-1], ms=2)
 
 
 ani = animation.FuncAnimation(

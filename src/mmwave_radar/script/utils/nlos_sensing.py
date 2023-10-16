@@ -2,6 +2,20 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
+def pc_filter(pc, x_min, x_max, y_min, y_max):
+    """
+    Arguments:
+        pc: shape=(N, 2), [[x, y]]
+        x_min, x_max, y_min, y_max: 保留的点云范围
+    Returns:
+        pc_left: shape=(M, 2)
+    """
+    flag_x = np.logical_and(pc[:, 0]>=x_min, pc[:, 0]<=x_max)
+    flag_y = np.logical_and(pc[:, 1]>=y_min, pc[:, 1]<=y_max)
+    flag = np.logical_and(flag_x, flag_y)
+    return pc[flag]
+
+
 def get_angle(points):
     """(1, 0)正方向和点中心的夹角
     """
@@ -151,6 +165,14 @@ def parallel_line_distance(coef, dist):
 
 
 def bounding_box2(laser_point_cloud, delta_x=0.1, delta_y=0.1, fixed=False):
+    """
+    Arguments:
+        laser_point_cloud: shape=(N, 2), [[x, y]]
+        delta_x, delta_y: 比点云范围宽一点
+    Returns:
+        key_points: shape=(5, 2), [box_center, top_right, bottom_right, bottom_left, top_left]
+        box_hw: [box_height, box_width]
+    """
     if fixed:
         max_x, min_x = np.max(laser_point_cloud[:, 0]), np.min(laser_point_cloud[:, 0])
         max_y, min_y = np.max(laser_point_cloud[:, 1]), np.min(laser_point_cloud[:, 1])
@@ -168,9 +190,11 @@ def bounding_box2(laser_point_cloud, delta_x=0.1, delta_y=0.1, fixed=False):
         bottom_left = np.array([min_x-delta_x, min_y-delta_y])
         top_left = np.array([min_x-delta_x, max_y+delta_y])
         box_center = (top_right + bottom_left) / 2
-        box_length = top_right[0] - top_left[0]
-        box_width = top_right[1] - bottom_right[1]
-    return (box_center, top_right, bottom_right, bottom_left, top_left), box_length, box_width
+        box_width = top_right[0] - top_left[0]
+        box_height = top_right[1] - bottom_right[1]
+    key_points = np.array([box_center, top_right, bottom_right, bottom_left, top_left])
+    box_hw = np.array([box_height, box_width])
+    return key_points, box_hw
 
 
 def bounding_box(laser_point_cloud, wall_coef, inter=None, theta=None, delta_x=0.10, delta_y=0.05):
