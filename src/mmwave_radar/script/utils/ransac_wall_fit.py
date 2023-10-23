@@ -4,12 +4,30 @@ import matplotlib.pyplot as plt
 import rosbag
 from sensor_msgs import point_cloud2
 from sklearn.cluster import DBSCAN
+import sys
+import os
 
-from nlos_sensing import transform, fit_line_ransac
+from nlos_sensing import transform, fit_line_ransac, pc_filter, get_span
 
 
+if len(sys.argv) > 1:
+    file_path = sys.argv[1]
+    out_path = sys.argv[2]
+    mode = sys.argv[3]
+else:
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20230626/exp01_2023-06-26-19-21-33.bag"
+    out_path = "/home/agent/Code/ackermann_car_nav/data/20231023"
+    mode = "train"
+file_name = file_path.split('/')[-1].split('.')[0][:-20]
+os.makedirs(f"{out_path}/images/{mode}", exist_ok=True)
+os.makedirs(f"{out_path}/labels/{mode}", exist_ok=True)
+os.makedirs(f"{out_path}/gifs", exist_ok=True)
+save_gif = True
 cluster = DBSCAN(eps=0.1, min_samples=5)
 filter = DBSCAN(eps=1, min_samples=10)
+min_points_inline = 20
+min_length_inline = 0.6
+local_sensing_range = [-1, 5, -3, 3]  # 切割小车周围点云
 
 fig, ax = plt.subplots(figsize=(16, 16))
 color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'wo', 'mo', 'ko']
@@ -21,10 +39,10 @@ def init_fig():
     ax.set_ylabel('y(m)')
     ax.set_xlim([-5, 5])
     ax.set_ylim([-5, 5])
+    ax.tick_params(direction='in')
 
 def gen_data():
-    for topic, msg, t in rosbag.Bag(
-        "/home/dingrong/Code/ackermann_car_nav/data/floor1_dynamic_2023-05-16-17-41-08.bag", 'r'):
+    for topic, msg, t in rosbag.Bag(file_path, 'r'):
         if topic == '/laser_point_cloud':
             points = point_cloud2.read_points_list(
                 msg, field_names=['x', 'y']
@@ -34,11 +52,8 @@ def gen_data():
             point_cloud = np.array([x_pos, y_pos]).T
             # 从激光雷达坐标系到小车坐标系
             point_cloud = transform(point_cloud, 0.08, 0, 180)
-            # 过滤，去掉以距离小车中心5米以外的点
-            flag_x = np.logical_and(point_cloud[:, 0]>=-1, point_cloud[:, 0]<=5)
-            flag_y = np.logical_and(point_cloud[:, 1]>=-5, point_cloud[:, 1]<=5)
-            flag = np.logical_and(flag_x, flag_y) 
-            point_cloud = point_cloud[flag]
+            # 过滤，去掉以距离小车中心3米以外的点
+            point_cloud = pc_filter(point_cloud, *local_sensing_range)
             yield point_cloud, msg.header.seq
 
 def visualize_cluster(result):
@@ -62,8 +77,8 @@ def visualize(result):
     init_fig()
     point_cloud, seq = result
     fitted_lines = []
-    for i in range(3):
-        if len(point_cloud) < 100:
+    for i in range(2):
+        if len(point_cloud) < min_points_inline:
             break
         coef, inlier_mask = fit_line_ransac(point_cloud)
         db = filter.fit(point_cloud[inlier_mask])
@@ -71,8 +86,12 @@ def visualize(result):
         cluster_mask[inlier_mask] = db.labels_ >= 0
         inlier_mask = np.logical_and(inlier_mask, cluster_mask)
         inlier_points = point_cloud[inlier_mask]
-        print(f"line {i}: {len(inlier_points)}")
-        if len(inlier_points) < 50:
+        # 过滤非墙面的直线
+        # 点数太少
+        if len(inlier_points) < min_points_inline:
+            continue
+        # 跨度太小
+        if get_span(inlier_points) < min_length_inline:
             continue
         ax.plot(inlier_points[:, 0], inlier_points[:, 1], color_panel[i], ms=2)
         fitted_lines.append([coef, inlier_mask])
@@ -83,7 +102,9 @@ def visualize(result):
 
 ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
-    init_func=init_fig, repeat=False
+    init_func=init_fig, repeat=False, save_count=1000
 )
-# ani.save("plan1-2.gif", writer='imagemagick')
-plt.show()
+if save_gif:
+    ani.save(f"{out_path}/gifs/{file_name}.gif", writer='pillow')
+else:
+    plt.show()
