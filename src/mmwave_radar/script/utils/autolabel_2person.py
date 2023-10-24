@@ -5,46 +5,14 @@ import matplotlib.patches as patches
 from matplotlib import rcParams
 rcParams['font.family'] = 'serif'
 rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
-from sklearn.cluster import DBSCAN
 import pickle
 import os
 import cv2
 import sys
 
 from radar_fft_music_RA import *
-from nlos_sensing import transform, bounding_box2, intersection_of_2line, isin_triangle
-from nlos_sensing import get_span, find_end_point, fit_line_ransac, line_by_coef_p
-from nlos_sensing import transform_inverse, line_symmetry_point, line_by_2p, pc_filter
-
-
-if len(sys.argv) > 1:
-    file_path = sys.argv[1]
-    out_path = sys.argv[2]
-    mode = sys.argv[3]
-else:
-    file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-C3_2023-10-01-21-30-52.pkl"
-    out_path = "/home/agent/Code/ackermann_car_nav/data/20231015"
-    mode = "train"
-file_name = file_path.split('/')[-1].split('.')[0][:-20]
-os.makedirs(f"{out_path}/images/{mode}", exist_ok=True)
-os.makedirs(f"{out_path}/labels/{mode}", exist_ok=True)
-os.makedirs(f"{out_path}/gifs", exist_ok=True)
-save_gif = True
-save_data = True
-plot_radar_pc = True
-img_fmt = True
-cnt = 0
-local_sensing_range = [-0.5, 5, -3, 3]  # 切割小车周围点云
-min_onboard_laser_point_num = 20
-min_GT_laser_point_num = 4
-min_points_inline = 20
-min_length_inline = 0.6
-ransac_sigma = 0.02
-ransac_iter = 200
-filter = DBSCAN(eps=1, min_samples=20)
-stamp, accuracy = [], []
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
-color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'mo', 'ko']
+from nlos_sensing import transform, bounding_box2, isin_triangle, transform_inverse, line_symmetry_point, pc_filter
+from corner_type import L_open_corner
 
 
 def init_fig():
@@ -100,52 +68,8 @@ def visualize(result):
     init_fig()
     t, laser_pc_person1, laser_pc_person2, laser_pc_onboard, RA_cart, mmwave_point_cloud = result
 
-    # 提取墙面
-    fitted_lines = []
-    for i in range(2):
-        # 不用3条线就可以覆盖所有点
-        if len(laser_pc_onboard) < min_points_inline:
-            break
-        coef, inlier_mask = fit_line_ransac(laser_pc_onboard, max_iter=ransac_iter, sigma=ransac_sigma)
-        # 过滤在墙面的直线上但明显是噪声的点
-        db = filter.fit(laser_pc_onboard[inlier_mask])
-        cluster_mask = np.zeros_like(inlier_mask) > 0
-        cluster_mask[inlier_mask] = db.labels_ >= 0  # 即使前墙是2段的也保留
-        inlier_mask = np.logical_and(inlier_mask, cluster_mask)
-        inlier_points = laser_pc_onboard[inlier_mask]
-        # 过滤非墙面的直线
-        # 点数太少
-        if len(inlier_points) < min_points_inline:
-            continue
-        # 跨度太小
-        if get_span(inlier_points) < min_length_inline:
-            continue
-        outlier_mask = np.logical_not(inlier_mask)
-        laser_pc_onboard = laser_pc_onboard[outlier_mask]
-        fitted_lines.append([coef, inlier_points])
-
-    # 区分墙面，目前就针对L开放型转角做
-    coef1, inlier_points1 = fitted_lines[0]
-    center1 = np.mean(inlier_points1, axis=0)
-    coef2, inlier_points2 = fitted_lines[1]
-    center2 = np.mean(inlier_points2, axis=0)
-    assert np.abs(coef1[0]-coef2[0]) > 1, "parallel walls?"
-    if center1[1] > center2[1]:  # 判断哪个是前墙
-        far_wall = coef1
-        barrier_wall = coef2
-        barrier_corner = find_end_point(inlier_points2, 1)[1]
-        barrier_corner = np.array(barrier_corner)
-    else:
-        far_wall = coef2
-        barrier_wall = coef1
-        barrier_corner = find_end_point(inlier_points1, 1)[1]
-        barrier_corner = np.array(barrier_corner)
-    symmtric_corner = line_symmetry_point(far_wall, barrier_corner)
-    line_by_radar_and_corner = line_by_2p(np.array([0, 0]), barrier_corner)
-    line_by_far_wall_and_symmtric_corner = line_by_coef_p(far_wall, symmtric_corner)
-    inter1 = intersection_of_2line(line_by_radar_and_corner, far_wall)
-    inter2 = intersection_of_2line(line_by_radar_and_corner, line_by_far_wall_and_symmtric_corner)
-    inter3 = line_symmetry_point(far_wall, inter2)
+    far_wall, inlier_points1, barrier_wall, inlier_points2, barrier_corner, \
+        symmtric_corner, inter1, inter2, inter3 = L_open_corner(laser_pc_onboard)
     ax1.plot(*inter1, color_panel[-2], ms=5)
     ax1.plot(*inter2, color_panel[-2], ms=5)
     ax1.plot(*inter3, color_panel[-2], ms=5)
@@ -232,11 +156,35 @@ def visualize(result):
     ax1.plot(laser_pc_person2[:, 0], laser_pc_person2[:, 1], color_panel[-1], ms=2)
 
 
-ani = animation.FuncAnimation(
-    fig, visualize, gen_data, interval=100,
-    init_func=init_fig, repeat=False, save_count=1000
-)
-if save_gif:
-    ani.save(f"{out_path}/gifs/{file_name}.gif", writer='pillow')
-else:
-    plt.show()
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+        out_path = sys.argv[2]
+        mode = sys.argv[3]
+    else:
+        file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-C3_2023-10-01-21-30-52.pkl"
+        out_path = "/home/agent/Code/ackermann_car_nav/data/20231024"
+        mode = "train"
+    file_name = file_path.split('/')[-1].split('.')[0][:-20]
+    os.makedirs(f"{out_path}/images/{mode}", exist_ok=True)
+    os.makedirs(f"{out_path}/labels/{mode}", exist_ok=True)
+    os.makedirs(f"{out_path}/gifs", exist_ok=True)
+    save_gif = True
+    save_data = True
+    plot_radar_pc = True
+    img_fmt = True
+    local_sensing_range = [-0.5, 5, -3, 3]  # 切割小车周围点云
+    min_onboard_laser_point_num = 20
+    min_GT_laser_point_num = 4
+    color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'mo', 'ko']
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    cnt = 0
+    ani = animation.FuncAnimation(
+        fig, visualize, gen_data, interval=100,
+        init_func=init_fig, repeat=False, save_count=1000
+    )
+    if save_gif:
+        ani.save(f"{out_path}/gifs/{file_name}.gif", writer='pillow')
+    else:
+        plt.show()
