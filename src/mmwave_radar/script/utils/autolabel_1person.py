@@ -41,7 +41,7 @@ def gen_data():
         if len(laser_pc_onboard) < min_onboard_laser_point_num:
             continue
         # 小车->毫米波雷达
-        laser_pc_onboard = transform_inverse(laser_pc_onboard, 0.17, 0, 90)
+        laser_pc_onboard = transform_inverse(laser_pc_onboard, 0.17, 0, 360-90)
 
         # 生成毫米波RA tensor和点云
         result = gen_point_cloud_plan3(mmwave_raw_data)
@@ -53,8 +53,8 @@ def gen_data():
             continue
         # 标定激光雷达->小车坐标系->毫米波雷达坐标系
         laser_pc_person = transform_inverse(
-            transform_inverse(laser_pc_person, inter[0], inter[1], 360-theta), 
-            0.17, 0, 90
+            transform_inverse(laser_pc_person, inter[0], inter[1], theta), 
+            0.17, 0, 360-90
         )
         yield t, laser_pc_person, laser_pc_onboard, RA_cart, mmwave_point_cloud
 
@@ -77,17 +77,26 @@ def visualize(result):
     gt_center = key_points[0]
     # 只要人进入NLOS就保存数据
     if np.cross(inter3-inter1, gt_center-inter1) > 0:
+        # 生成NLOS区域：遍历所有的格子，把这个格子转化为坐标，判断这个坐标是否在三角形内
+        pos = np.array([
+            np.array([[i for i in range(-H, H)] for j in range(H)]).flatten(),
+            np.array([[j for i in range(-H, H)] for j in range(H)]).flatten()
+        ]).T * range_res
+        mask = isin_triangle(symmtric_corner, inter2, inter1, pos).astype(np.float32).reshape(H, 2*H)
+
         # 毫米波点云过滤
         flag = isin_triangle(symmtric_corner, inter2, inter1, mmwave_point_cloud[:, :2])
         point_cloud_nlos = mmwave_point_cloud[flag]
 
         # 激光点云映射
-        laser_pc_person = line_symmetry_point(far_wall, laser_pc_person)
+        if isin_triangle(barrier_corner, inter1, inter3, gt_center):
+            laser_pc_person = line_symmetry_point(far_wall, laser_pc_person)
         # bounding box ground truth
         key_points, box_hw = bounding_box2(laser_pc_person, delta_x=0.1, delta_y=0.1)
         # 激光点云纠偏，直接将人的中心移动到毫米波点云中心
         if len(point_cloud_nlos) and isin_triangle(barrier_corner, inter1, inter3, gt_center):
-            key_points[0] = np.mean(point_cloud_nlos[:, :2], axis=0)
+            delta = np.mean(point_cloud_nlos[:, :2], axis=0) - key_points[0]
+            key_points += delta
         # 防止center出界
         key_points[0, 0] = np.clip(key_points[0, 0], -(H-1)*range_res, (H-1)*range_res)
         key_points[0, 1] = np.clip(key_points[0, 1], 0, (H-1)*range_res)
@@ -103,8 +112,10 @@ def visualize(result):
                 image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.png"
                 cv2.imwrite(image_path, RA_cart)
             else:
+                RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
+                res = np.concatenate([RA_cart, mask[..., np.newaxis]], axis=2)
                 image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.npy"
-                np.save(image_path, RA_cart)
+                np.save(image_path, res)
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
             fwrite = open(txt_path, 'w')
             cnt += 1
@@ -136,8 +147,8 @@ if __name__ == '__main__':
         out_path = sys.argv[2]
         mode = sys.argv[3]
     else:
-        file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A_2023-10-01-20-21-03.pkl"
-        out_path = "/home/agent/Code/ackermann_car_nav/data/20231024"
+        file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A2_2023-10-01-20-52-28.pkl"
+        out_path = "/home/agent/Code/ackermann_car_nav/data/tmp"
         mode = "train"
     file_name = file_path.split('/')[-1].split('.')[0][:-20]
     os.makedirs(f"{out_path}/images/{mode}", exist_ok=True)
@@ -146,7 +157,7 @@ if __name__ == '__main__':
     save_gif = True
     save_data = True
     plot_radar_pc = True
-    img_fmt = True
+    img_fmt = False
     local_sensing_range = [-0.5, 5, -3, 3]  # 切割小车周围点云
     min_onboard_laser_point_num = 20
     min_GT_laser_point_num = 4

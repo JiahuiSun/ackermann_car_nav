@@ -307,30 +307,30 @@ def transform(radar_xy, delta_x, delta_y, yaw):
     Args:
         radar_xy: Nx2，雷达坐标系下的点云
         delta_x, delta_y: 雷达在世界坐标系中的坐标
-        yaw: 雷达坐标系逆时针旋转yaw度与世界坐标系重合
+        yaw: 世界坐标系逆时针旋转yaw度与雷达坐标系重合
 
     Returns:
         world_xy: Nx2，雷达坐标系下的点云转换到世界坐标系下
     """
     yaw = yaw * np.pi / 180
-    rotation_matrix = np.array([[np.cos(yaw), -np.sin(yaw)], [np.sin(yaw), np.cos(yaw)]])
+    rotation_matrix = np.array([[np.cos(yaw), np.sin(yaw)], [-np.sin(yaw), np.cos(yaw)]])
     translation_vector = np.array([[delta_x, delta_y]])
     world_xy = radar_xy.dot(rotation_matrix) + translation_vector
     return world_xy
 
 
 def transform_inverse(world_xy, delta_x, delta_y, yaw):
-    """Transform xy from radar coordinate to the world coordinate.
+    """Transform xy from world coordinate to the radar coordinate.
     Args:
         world_xy: Nx2，世界坐标系下的点云
         delta_x, delta_y: 雷达在世界坐标系中的坐标
-        yaw: 雷达坐标系逆时针旋转yaw度与世界坐标系重合
+        yaw: 世界坐标系逆时针旋转yaw度与雷达坐标系重合
 
     Returns:
         radar_xy: Nx2，世界坐标系下的点云转换到雷达坐标系下
     """
     yaw = yaw * np.pi / 180
-    rotation_matrix = np.array([[np.cos(yaw), np.sin(yaw)], [-np.sin(yaw), np.cos(yaw)]])
+    rotation_matrix = np.array([[np.cos(yaw), -np.sin(yaw)], [np.sin(yaw), np.cos(yaw)]])
     translation_vector = np.array([[delta_x, delta_y]])
     radar_xy = (world_xy - translation_vector).dot(rotation_matrix)
     return radar_xy

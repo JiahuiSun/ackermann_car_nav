@@ -4,11 +4,18 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 import struct
+import sys
+
 from nlos_sensing import intersection_of_2line, line_by_vertical_coef_p, parallel_line_distance, point2line_distance, fit_line_ransac, pc_filter
 
 
 ## 读取数据
-file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-C3_2023-10-01-21-30-52"
+if len(sys.argv) > 1:
+    file_path = sys.argv[1]
+    single = int(sys.argv[2])
+else:
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A_2023-10-01-20-21-03"
+    single = 1
 bag = rosbag.Bag(f"{file_path}.bag")
 bag_data = bag.read_messages(topics=['/laser_point_cloud', '/laser_point_cloud2', '/mmwave_radar_point_cloud', '/mmwave_radar_raw_data'])
 frame_bytes = 196608
@@ -157,17 +164,18 @@ for i in range(len(gt_laser_list)):
     coef2a, coef2b = parallel_line_distance(coef, CD)
     coef2 = coef2a if point2line_distance(coef2a, [0, 0]) > point2line_distance(coef2b, [0, 0]) else coef2b
     inter = intersection_of_2line(coef1, coef2)
-    fwrite.write(f"laser points: {laser_part.shape} theta: {theta*180/np.pi}, inter: {inter}")
+    fwrite.write(f"laser points: {laser_part.shape} theta: {theta*180/np.pi}, inter: {inter}\n")
 
-    # 标定激光雷达点云只保留人
-    # laser_pc_person = pc_filter(laser_frame, *gt_range)
-    laser_pc_person1 = pc_filter(laser_frame, *gt_range1)
-    laser_pc_person2 = pc_filter(laser_frame, *gt_range2)
-
-    # 保存结果：时间、小车激光雷达点云、人的点云、毫米波点云、毫米波原始数据、小车位姿
     transform = (inter, theta)
-    # tmp = (robot_laser_list[i][1], robot_laser_list[i][2], laser_pc_person, mmwave_list[i][2], mmwave_raw_list[i][2], transform)
-    tmp = (robot_laser_list[i][1], robot_laser_list[i][2], laser_pc_person1, laser_pc_person2, mmwave_list[i][2], mmwave_raw_list[i][2], transform)
+    # 保存结果：时间、小车激光雷达点云、人的点云、毫米波点云、毫米波原始数据、小车位姿
+    # 标定激光雷达点云只保留人
+    if single:
+        laser_pc_person = pc_filter(laser_frame, *gt_range)
+        tmp = (robot_laser_list[i][1], robot_laser_list[i][2], laser_pc_person, mmwave_list[i][2], mmwave_raw_list[i][2], transform)
+    else:
+        laser_pc_person1 = pc_filter(laser_frame, *gt_range1)
+        laser_pc_person2 = pc_filter(laser_frame, *gt_range2)
+        tmp = (robot_laser_list[i][1], robot_laser_list[i][2], laser_pc_person1, laser_pc_person2, mmwave_list[i][2], mmwave_raw_list[i][2], transform)
     all_point_cloud.append(tmp)
 fwrite.close()
 

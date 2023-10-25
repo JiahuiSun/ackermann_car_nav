@@ -41,7 +41,7 @@ def gen_data():
         if len(laser_pc_onboard) < min_onboard_laser_point_num:
             continue
         # 小车->毫米波雷达
-        laser_pc_onboard = transform_inverse(laser_pc_onboard, 0.17, 0, 90)
+        laser_pc_onboard = transform_inverse(laser_pc_onboard, 0.17, 0, 360-90)
 
         # 生成毫米波RA tensor和点云
         result = gen_point_cloud_plan3(mmwave_raw_data)
@@ -53,12 +53,12 @@ def gen_data():
             continue
         # 标定激光雷达->小车坐标系->毫米波雷达坐标系
         laser_pc_person1 = transform_inverse(
-            transform_inverse(laser_pc_person1, inter[0], inter[1], 360-theta), 
-            0.17, 0, 90
+            transform_inverse(laser_pc_person1, inter[0], inter[1], theta), 
+            0.17, 0, 360-90
         )
         laser_pc_person2 = transform_inverse(
-            transform_inverse(laser_pc_person2, inter[0], inter[1], 360-theta), 
-            0.17, 0, 90
+            transform_inverse(laser_pc_person2, inter[0], inter[1], theta), 
+            0.17, 0, 360-90
         )
         yield t, laser_pc_person1, laser_pc_person2, laser_pc_onboard, RA_cart, mmwave_point_cloud
 
