@@ -30,10 +30,7 @@ def init_fig():
 def gen_data():
     with open(file_path, 'rb') as f:
         all_point_cloud = pickle.load(f)
-    for t, laser_pc, laser_pc_person1, laser_pc_person2, mmwave_pc, mmwave_raw_data, trans in all_point_cloud:
-        inter, theta = trans
-        theta = theta * 180 / np.pi
-        
+    for t, laser_pc, laser_pc_person1, laser_pc_person2, mmwave_pc, mmwave_raw_data in all_point_cloud:
         # 小车激光雷达只保留小车附近的点
         # 激光雷达->小车
         laser_pc_onboard = transform(laser_pc, 0.08, 0, 180)
@@ -53,11 +50,11 @@ def gen_data():
             continue
         # 标定激光雷达->小车坐标系->毫米波雷达坐标系
         laser_pc_person1 = transform_inverse(
-            transform_inverse(laser_pc_person1, inter[0], inter[1], theta), 
+            transform(laser_pc_person1, 0.08, 0, 180), 
             0.17, 0, 360-90
         )
         laser_pc_person2 = transform_inverse(
-            transform_inverse(laser_pc_person2, inter[0], inter[1], theta), 
+            transform(laser_pc_person2, 0.08, 0, 180), 
             0.17, 0, 360-90
         )
         yield t, laser_pc_person1, laser_pc_person2, laser_pc_onboard, RA_cart, mmwave_point_cloud
@@ -70,7 +67,7 @@ def visualize(result):
 
     onboard_walls, onboard_points = L_open_corner(laser_pc_onboard)
     far_wall, far_wall_pc, barrier_wall_pc = onboard_walls['far_wall'], onboard_walls['far_wall_pc'], onboard_walls['barrier_wall_pc']
-    barrier_corner, symmtric_corner = onboard_points['barrier_corner'], onboard_points['symmtric_corner']
+    barrier_corner, symmtric_corner = onboard_points['barrier_corner'], onboard_points['symmetric_barrier_corner']
     inter1, inter2, inter3 = onboard_points['inter1'], onboard_points['inter2'], onboard_points['inter3']
     ax1.plot(*inter1, color_panel[-2], ms=5)
     ax1.plot(*inter2, color_panel[-2], ms=5)
@@ -87,9 +84,12 @@ def visualize(result):
     is_begin_nlos2 = np.cross(inter3-inter1, person2_center-inter1) > 0
     # 当有人进入NLOS区域内，开始保存数据
     if is_begin_nlos1 or is_begin_nlos2:
-        # 毫米波点云过滤
-        flag = isin_triangle(symmtric_corner, inter2, inter1, mmwave_point_cloud[:, :2])
-        point_cloud_nlos = mmwave_point_cloud[flag]
+        # 生成NLOS区域：遍历所有的格子，把这个格子转化为坐标，判断这个坐标是否在三角形内
+        pos = np.array([
+            np.array([[i for i in range(-H, H)] for j in range(H)]).flatten(),
+            np.array([[j for i in range(-H, H)] for j in range(H)]).flatten()
+        ]).T * range_res
+        mask = isin_triangle(symmtric_corner, inter2, inter1, pos).astype(np.float32).reshape(H, 2*H)
 
         # 激光点云映射
         if isin_triangle(barrier_corner, inter1, inter3, person1_center):
@@ -123,8 +123,10 @@ def visualize(result):
                 image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.png"
                 cv2.imwrite(image_path, RA_cart)
             else:
+                RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
+                res = np.concatenate([RA_cart, mask[..., np.newaxis]], axis=2)
                 image_path = f"{out_path}/images/{mode}/{file_name}_{cnt}.npy"
-                np.save(image_path, RA_cart)
+                np.save(image_path, res)
             txt_path = f"{out_path}/labels/{mode}/{file_name}_{cnt}.txt"
             fwrite = open(txt_path, 'w')
             cnt += 1

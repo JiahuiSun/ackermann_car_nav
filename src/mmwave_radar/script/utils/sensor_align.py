@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import struct
 import sys
 
-from nlos_sensing import intersection_of_2line, line_by_vertical_coef_p, parallel_line_distance, point2line_distance, fit_line_ransac, pc_filter
-
+from nlos_sensing import intersection_of_2line, line_by_vertical_coef_p, parallel_line_distance, point2line_distance, fit_line_ransac, pc_filter, registration
+from corner_type import L_open_corner_onboard, L_open_corner_gt
 
 ## 读取数据
 if len(sys.argv) > 1:
@@ -143,17 +143,13 @@ robot_range = [-2.1, 0, -3, 0]  # 切割小车
 gt_range = [-8, 0, -0.3, 1.5]  # 切割人的点云
 gt_range1 = [-8, 0, -0.3, 0.7]  # 切割人的点云
 gt_range2 = [-8, 0, 0.8, 1.5]  # 切割人的点云
+gt_sensing_range = [-4, 2, -4, 3]  # 切割gt周围点云
 
-all_point_cloud = []
-for i in range(len(gt_laser_list)):
-    # 用gt_laser提取小车位姿
-    laser_frame = gt_laser_list[i][2]
+def old_align(laser_frame):
     laser_part = pc_filter(laser_frame, *robot_range)
-
     # 提取小车的面的直线
     coef, inlier_mask = fit_line_ransac(laser_part, max_iter=200, sigma=0.02)
     laser_part = laser_part[inlier_mask]
-
     # 根据两条腿计算旋转角度
     theta = np.arctan(coef[0]) + np.pi if coef[0] < 0 else np.arctan(coef[0])
     # 计算小车中心点在标定激光雷达坐标系下的位置
@@ -164,18 +160,35 @@ for i in range(len(gt_laser_list)):
     coef2a, coef2b = parallel_line_distance(coef, CD)
     coef2 = coef2a if point2line_distance(coef2a, [0, 0]) > point2line_distance(coef2b, [0, 0]) else coef2b
     inter = intersection_of_2line(coef1, coef2)
-    fwrite.write(f"laser points: {laser_part.shape} theta: {theta*180/np.pi}, inter: {inter}\n")
-
     transform = (inter, theta)
+    return transform
+
+all_point_cloud = []
+for i in range(len(gt_laser_list)):
+    # 用gt_laser提取小车位姿
+    laser_frame = gt_laser_list[i][2]
+    # 从GT激光雷达点云中提取墙面
+    gt_laser_pc = pc_filter(laser_frame, *gt_sensing_range)
+    gt_walls, gt_points = L_open_corner_gt(gt_laser_pc)
+    src = gt_points['reference_points'].T
+    # 从onboard激光雷达点云中提取墙面
+    onboard_walls, onboard_points = L_open_corner_onboard(robot_laser_list[i][2])
+    tar = onboard_points['reference_points'].T
+    # 从GT激光雷达到小车激光雷达
+    R, T = registration(src, tar)
+
     # 保存结果：时间、小车激光雷达点云、人的点云、毫米波点云、毫米波原始数据、小车位姿
     # 标定激光雷达点云只保留人
     if single:
         laser_pc_person = pc_filter(laser_frame, *gt_range)
-        tmp = (robot_laser_list[i][1], robot_laser_list[i][2], laser_pc_person, mmwave_list[i][2], mmwave_raw_list[i][2], transform)
+        gt2car_person = (R.dot(laser_pc_person.T) + T).T
+        tmp = (robot_laser_list[i][1], robot_laser_list[i][2], gt2car_person, mmwave_list[i][2], mmwave_raw_list[i][2])
     else:
         laser_pc_person1 = pc_filter(laser_frame, *gt_range1)
         laser_pc_person2 = pc_filter(laser_frame, *gt_range2)
-        tmp = (robot_laser_list[i][1], robot_laser_list[i][2], laser_pc_person1, laser_pc_person2, mmwave_list[i][2], mmwave_raw_list[i][2], transform)
+        gt2car_person1 = (R.dot(laser_pc_person1.T) + T).T
+        gt2car_person2 = (R.dot(laser_pc_person2.T) + T).T
+        tmp = (robot_laser_list[i][1], robot_laser_list[i][2], gt2car_person1, gt2car_person2, mmwave_list[i][2], mmwave_raw_list[i][2])
     all_point_cloud.append(tmp)
 fwrite.close()
 

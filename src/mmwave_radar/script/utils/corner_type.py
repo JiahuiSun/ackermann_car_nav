@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
 
-from nlos_sensing import fit_line_ransac, find_end_point, line_symmetry_point
+from nlos_sensing import fit_line_ransac, find_end_point, line_symmetry_point, parallel_line_distance
 from nlos_sensing import intersection_of_2line, line_by_coef_p, get_span, line_by_2p
 
 
@@ -91,6 +91,53 @@ def L_open_corner(laser_pc_onboard):
     return walls, key_points
 
 
+def L_open_corner_onboard(laser_pc_onboard):
+    """输入小车激光雷达坐标系下小车激光雷达点云，输出转角各个墙面的直线和关键点
+    Args:
+        laser_pc_onboard: (N, 2)
+    Returns:
+        walls: 各个墙面参数和点云
+        key_points: 转角坐标，NLOS区域5个相关坐标
+    """
+    # 提取墙面
+    fitted_lines, remaining_pc = fit_lines(laser_pc_onboard, 2)
+
+    # 区分墙面
+    coef1, inlier_points1 = fitted_lines[0]
+    center1 = np.mean(inlier_points1, axis=0)
+    coef2, inlier_points2 = fitted_lines[1]
+    center2 = np.mean(inlier_points2, axis=0)
+    if center1[0] < center2[0]:  # 判断哪个是前墙
+        far_wall, far_wall_pc = coef1, inlier_points1
+        barrier_wall, barrier_wall_pc = coef2, inlier_points2
+    else:
+        far_wall, far_wall_pc = coef2, inlier_points2
+        barrier_wall, barrier_wall_pc = coef1, inlier_points1
+
+    # 提取关键点：可是barrier corner可能被遮挡
+    barrier_corner = np.array(find_end_point(barrier_wall_pc, 0)[0])
+    # 用barrier wall和far wall创造出4个不共线的点
+    coef1, coef2 = parallel_line_distance(barrier_wall, 1.0)
+    inter1 = intersection_of_2line(coef1, far_wall)
+    inter2 = intersection_of_2line(coef2, far_wall)
+    reference_point1, reference_point2 = (inter1, inter2) if inter1[1] > inter2[1] else (inter2, inter1)
+    coef1, coef2 = parallel_line_distance(far_wall, 1.0)
+    inter1 = intersection_of_2line(coef1, barrier_wall)
+    inter2 = intersection_of_2line(coef2, barrier_wall)
+    reference_point3, reference_point4 = (inter1, inter2) if inter1[0] < inter2[0] else (inter2, inter1)
+    walls = {
+        'far_wall': far_wall,
+        'far_wall_pc': far_wall_pc,
+        'barrier_wall': barrier_wall,
+        'barrier_wall_pc': barrier_wall_pc
+    }
+    key_points = {
+        'barrier_corner': barrier_corner,
+        'reference_points': np.array([reference_point1, reference_point2, reference_point3, reference_point4])
+    }
+    return walls, key_points
+
+
 def L_open_corner_gt(laser_pc_gt):
     """输入GT激光雷达坐标系下的点云，输出转角各个墙面的直线和关键点
     Args:
@@ -116,7 +163,15 @@ def L_open_corner_gt(laser_pc_gt):
 
     # 提取关键点
     barrier_corner = np.array(find_end_point(barrier_wall_pc, 1)[1])
-    symmtric_barrier_corner = line_symmetry_point(far_wall, barrier_corner)
+    # 用barrier wall和far wall创造出4个不共线的点
+    coef1, coef2 = parallel_line_distance(barrier_wall, 1.0)
+    inter1 = intersection_of_2line(coef1, far_wall)
+    inter2 = intersection_of_2line(coef2, far_wall)
+    reference_point1, reference_point2 = (inter1, inter2) if inter1[0] > inter2[0] else (inter2, inter1)
+    coef1, coef2 = parallel_line_distance(far_wall, 1.0)
+    inter1 = intersection_of_2line(coef1, barrier_wall)
+    inter2 = intersection_of_2line(coef2, barrier_wall)
+    reference_point3, reference_point4 = (inter1, inter2) if inter1[1] > inter2[1] else (inter2, inter1)
     walls = {
         'far_wall': far_wall,
         'far_wall_pc': far_wall_pc,
@@ -125,6 +180,6 @@ def L_open_corner_gt(laser_pc_gt):
     }
     points = {
         'barrier_corner': barrier_corner,
-        'symmetric_barrier_corner': symmtric_barrier_corner
+        'reference_points': np.array([reference_point1, reference_point2, reference_point3, reference_point4])
     }
     return walls, points

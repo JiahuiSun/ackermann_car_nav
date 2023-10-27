@@ -30,10 +30,7 @@ def init_fig():
 def gen_data():
     with open(file_path, 'rb') as f:
         all_point_cloud = pickle.load(f)
-    for t, laser_pc_onboard, laser_pc_person, mmwave_pc, mmwave_raw_data, trans in all_point_cloud:
-        inter, theta = trans
-        theta = theta * 180 / np.pi
-        
+    for t, laser_pc_onboard, laser_pc_person, mmwave_pc, mmwave_raw_data in all_point_cloud:
         # 小车激光雷达只保留小车附近的点
         # 激光雷达->小车
         laser_pc_onboard = transform(laser_pc_onboard, 0.08, 0, 180)
@@ -53,7 +50,7 @@ def gen_data():
             continue
         # 标定激光雷达->小车坐标系->毫米波雷达坐标系
         laser_pc_person = transform_inverse(
-            transform_inverse(laser_pc_person, inter[0], inter[1], theta), 
+            transform(laser_pc_person, 0.08, 0, 180), 
             0.17, 0, 360-90
         )
         yield t, laser_pc_person, laser_pc_onboard, RA_cart, mmwave_point_cloud
@@ -66,7 +63,7 @@ def visualize(result):
 
     onboard_walls, onboard_points = L_open_corner(laser_pc_onboard)
     far_wall, far_wall_pc, barrier_wall_pc = onboard_walls['far_wall'], onboard_walls['far_wall_pc'], onboard_walls['barrier_wall_pc']
-    barrier_corner, symmtric_corner = onboard_points['barrier_corner'], onboard_points['symmtric_corner']
+    barrier_corner, symmtric_corner = onboard_points['barrier_corner'], onboard_points['symmetric_barrier_corner']
     inter1, inter2, inter3 = onboard_points['inter1'], onboard_points['inter2'], onboard_points['inter3']
     ax1.plot(*inter1, color_panel[-2], ms=5)
     ax1.plot(*inter2, color_panel[-2], ms=5)
@@ -86,19 +83,11 @@ def visualize(result):
         ]).T * range_res
         mask = isin_triangle(symmtric_corner, inter2, inter1, pos).astype(np.float32).reshape(H, 2*H)
 
-        # 毫米波点云过滤
-        flag = isin_triangle(symmtric_corner, inter2, inter1, mmwave_point_cloud[:, :2])
-        point_cloud_nlos = mmwave_point_cloud[flag]
-
         # 激光点云映射
         if isin_triangle(barrier_corner, inter1, inter3, gt_center):
             laser_pc_person = line_symmetry_point(far_wall, laser_pc_person)
         # bounding box ground truth
         key_points, box_hw = bounding_box2(laser_pc_person, delta_x=0.1, delta_y=0.1)
-        # 激光点云纠偏，直接将人的中心移动到毫米波点云中心
-        if len(point_cloud_nlos) and isin_triangle(barrier_corner, inter1, inter3, gt_center):
-            delta = np.mean(point_cloud_nlos[:, :2], axis=0) - key_points[0]
-            key_points += delta
         # 防止center出界
         key_points[0, 0] = np.clip(key_points[0, 0], -(H-1)*range_res, (H-1)*range_res)
         key_points[0, 1] = np.clip(key_points[0, 1], 0, (H-1)*range_res)
@@ -149,7 +138,7 @@ if __name__ == '__main__':
         out_path = sys.argv[2]
         mode = sys.argv[3]
     else:
-        file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A2_2023-10-01-20-52-28.pkl"
+        file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A_2023-10-01-20-21-03.pkl"
         out_path = "/home/agent/Code/ackermann_car_nav/data/tmp"
         mode = "train"
     file_name = file_path.split('/')[-1].split('.')[0][:-20]

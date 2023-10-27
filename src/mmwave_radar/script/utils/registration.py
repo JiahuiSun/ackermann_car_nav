@@ -9,7 +9,7 @@ import matplotlib.animation as animation
 import os
 
 from nlos_sensing import intersection_of_2line, line_by_vertical_coef_p, parallel_line_distance, point2line_distance, registration, pc_filter, fit_line_ransac, transform, transform_inverse
-from corner_type import L_open_corner_gt, L_open_corner
+from corner_type import L_open_corner_gt, L_open_corner_onboard
 
 ## 读取数据
 if len(sys.argv) > 1:
@@ -161,12 +161,11 @@ def gen_data():
         # 从GT激光雷达点云中提取墙面
         gt_laser_pc = pc_filter(gt_laser_list[i][2], *gt_sensing_range)
         gt_walls, gt_points = L_open_corner_gt(gt_laser_pc)
-        src = np.array([gt_points['barrier_corner'], gt_points['symmetric_barrier_corner']]).T
+        src = gt_points['reference_points'].T
 
         # 从onboard激光雷达点云中提取墙面
-        # FIXME: 这里有错误，原来这样做是在毫米波雷达坐标系下，但凑巧没事
-        onboard_walls, onboard_points = L_open_corner(robot_laser_list[i][2])
-        tar = np.array([onboard_points['barrier_corner'], onboard_points['symmetric_barrier_corner']]).T
+        onboard_walls, onboard_points = L_open_corner_onboard(robot_laser_list[i][2])
+        tar = onboard_points['reference_points'].T
 
         # 从GT激光雷达到小车激光雷达
         R, T = registration(src, tar)
@@ -207,7 +206,7 @@ def gen_data2():
         src2tar_far_wall_pc = transform_inverse(gt_walls['far_wall_pc'], inter[0], inter[1], theta)
         src2tar_barrier_wall_pc = transform_inverse(gt_walls['barrier_wall_pc'], inter[0], inter[1], theta)
         # 把激光雷达点云转化到小车坐标系下
-        onboard_walls, onboard_points = L_open_corner(robot_laser_list[i][2])
+        onboard_walls, onboard_points = L_open_corner_onboard(robot_laser_list[i][2])
         onboard_walls['far_wall_pc'] = transform(onboard_walls['far_wall_pc'], 0.08, 0, 180)
         onboard_walls['barrier_wall_pc'] = transform(onboard_walls['barrier_wall_pc'], 0.08, 0, 180)
 
