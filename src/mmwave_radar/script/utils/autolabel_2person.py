@@ -176,7 +176,7 @@ if __name__ == '__main__':
     save_gif = True
     save_data = True
     plot_radar_pc = True
-    img_fmt = True
+    img_fmt = False
     local_sensing_range = [-0.5, 5, -3, 3]  # 切割小车周围点云
     min_onboard_laser_point_num = 20
     min_GT_laser_point_num = 4

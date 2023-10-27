@@ -7,6 +7,10 @@ python3 autolabel_1person.py /home/agent/Code/ackermann_car_nav/data/20231002/so
 python3 autolabel_1person.py /home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A2_2023-10-01-20-52-28.pkl /home/agent/Code/ackermann_car_nav/data/rss_mask train
 python3 autolabel_1person.py /home/agent/Code/ackermann_car_nav/data/20231002/soft-3-D2_2023-10-01-20-57-51.pkl /home/agent/Code/ackermann_car_nav/data/rss_mask train
 
+python3 autolabel_2person.py /home/agent/Code/ackermann_car_nav/data/20231002/soft-3-C3_2023-10-01-21-30-52.pkl /home/agent/Code/ackermann_car_nav/data/rss_mask train
+python3 autolabel_2person.py /home/agent/Code/ackermann_car_nav/data/20231002/soft-3-D3_2023-10-01-21-13-33.pkl /home/agent/Code/ackermann_car_nav/data/rss_mask train
+python3 autolabel_2person.py /home/agent/Code/ackermann_car_nav/data/20231002/soft-3-F3_2023-10-01-21-36-24.pkl /home/agent/Code/ackermann_car_nav/data/rss_mask train
+
 python3 autolabel_1person.py /home/agent/Code/ackermann_car_nav/data/20230626/exp2_2023-06-26-19-46-27.pkl /home/agent/Code/ackermann_car_nav/data/rss_mask train
 python3 autolabel_1person.py /home/agent/Code/ackermann_car_nav/data/20230626/exp4_2023-06-26-19-50-17.pkl /home/agent/Code/ackermann_car_nav/data/rss_mask train
 python3 autolabel_1person.py /home/agent/Code/ackermann_car_nav/data/20230626/exp6_2023-06-26-19-52-03.pkl /home/agent/Code/ackermann_car_nav/data/rss_mask train
