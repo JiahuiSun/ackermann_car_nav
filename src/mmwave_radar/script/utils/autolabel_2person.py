@@ -68,8 +68,10 @@ def visualize(result):
     init_fig()
     t, laser_pc_person1, laser_pc_person2, laser_pc_onboard, RA_cart, mmwave_point_cloud = result
 
-    far_wall, inlier_points1, barrier_wall, inlier_points2, barrier_corner, \
-        symmtric_corner, inter1, inter2, inter3 = L_open_corner(laser_pc_onboard)
+    onboard_walls, onboard_points = L_open_corner(laser_pc_onboard)
+    far_wall, far_wall_pc, barrier_wall_pc = onboard_walls['far_wall'], onboard_walls['far_wall_pc'], onboard_walls['barrier_wall_pc']
+    barrier_corner, symmtric_corner = onboard_points['barrier_corner'], onboard_points['symmtric_corner']
+    inter1, inter2, inter3 = onboard_points['inter1'], onboard_points['inter2'], onboard_points['inter3']
     ax1.plot(*inter1, color_panel[-2], ms=5)
     ax1.plot(*inter2, color_panel[-2], ms=5)
     ax1.plot(*inter3, color_panel[-2], ms=5)
@@ -150,8 +152,8 @@ def visualize(result):
         ax1.plot(mmwave_point_cloud[dynamic_idx, 0], mmwave_point_cloud[dynamic_idx, 1], color_panel[0], ms=2)
     ax2.imshow(RA_cart[..., 0])
     # 激光雷达
-    ax1.plot(inlier_points1[:, 0], inlier_points1[:, 1], color_panel[1], ms=2)
-    ax1.plot(inlier_points2[:, 0], inlier_points2[:, 1], color_panel[1], ms=2)
+    ax1.plot(far_wall_pc[:, 0], far_wall_pc[:, 1], color_panel[1], ms=2)
+    ax1.plot(barrier_wall_pc[:, 0], barrier_wall_pc[:, 1], color_panel[1], ms=2)
     ax1.plot(laser_pc_person1[:, 0], laser_pc_person1[:, 1], color_panel[-1], ms=2)
     ax1.plot(laser_pc_person2[:, 0], laser_pc_person2[:, 1], color_panel[-1], ms=2)
 

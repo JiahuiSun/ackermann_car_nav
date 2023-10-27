@@ -16,7 +16,7 @@ if len(sys.argv) > 1:
     out_path = sys.argv[2]
     mode = sys.argv[3]
 else:
-    file_path = "/home/agent/Code/ackermann_car_nav/data/20230626/exp01_2023-06-26-19-21-33.bag"
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A_2023-10-01-20-21-03.bag"
     out_path = "/home/agent/Code/ackermann_car_nav/data/tmp"
     mode = "train"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
@@ -28,6 +28,7 @@ cluster1 = DBSCAN(eps=0.1, min_samples=5)
 min_points_inline = 20
 min_length_inline = 0.6
 local_sensing_range = [-1, 5, -3, 3]  # 切割小车周围点云
+gt_sensing_range = [-4, 2, -4, 3]  # 切割gt周围点云
 
 fig, ax = plt.subplots(figsize=(8, 8))
 color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'wo', 'mo', 'ko']
@@ -53,7 +54,7 @@ def gen_data():
             # 从激光雷达坐标系到小车坐标系
             # point_cloud = transform(point_cloud, 0.08, 0, 180)
             # 过滤，去掉以距离小车中心3米以外的点
-            # point_cloud = pc_filter(point_cloud, *local_sensing_range)
+            point_cloud = pc_filter(point_cloud, *gt_sensing_range)
             yield point_cloud, msg.header.seq
 
 def visualize_cluster(result):
@@ -77,9 +78,9 @@ def visualize(result):
     init_fig()
     point_cloud, seq = result
     fitted_lines, remaining_points = fit_lines(point_cloud, 2)
+    ax.plot(remaining_points[:, 0], remaining_points[:, 1], color_panel[-1], ms=2)
     for i, (coef, pc) in enumerate(fitted_lines):
         ax.plot(pc[:, 0], pc[:, 1], color_panel[i], ms=2)
-    ax.plot(remaining_points[:, 0], remaining_points[:, 1], color_panel[-1], ms=2)
     ax.set_title(f"frame id: {seq}")
 
 ani = animation.FuncAnimation(
@@ -87,6 +88,6 @@ ani = animation.FuncAnimation(
     init_func=init_fig, repeat=False, save_count=1000
 )
 if save_gif:
-    ani.save(f"{out_path}/gifs/{file_name}-wall.gif", writer='pillow')
+    ani.save(f"{out_path}/gifs/{file_name}-gt2.gif", writer='pillow')
 else:
     plt.show()

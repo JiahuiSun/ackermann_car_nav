@@ -144,6 +144,7 @@ robot_range = [-2.1, 0, -3, 0]  # 切割小车
 gt_range = [-8, 0, -0.3, 1.5]  # 切割人的点云
 gt_range1 = [-8, 0, -0.3, 0.7]  # 切割人的点云
 gt_range2 = [-8, 0, 0.8, 1.5]  # 切割人的点云
+gt_sensing_range = [-4, 2, -4, 3]  # 切割gt周围点云
 
 fig, ax = plt.subplots(figsize=(8, 8))
 color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'wo', 'mo', 'ko']
@@ -158,11 +159,12 @@ def init_fig():
 def gen_data():
     for i in range(len(gt_laser_list)):
         # 从GT激光雷达点云中提取墙面
-        gt_walls, gt_points = L_open_corner_gt(gt_laser_list[i][2])
+        gt_laser_pc = pc_filter(gt_laser_list[i][2], *gt_sensing_range)
+        gt_walls, gt_points = L_open_corner_gt(gt_laser_pc)
         src = np.array([gt_points['barrier_corner'], gt_points['symmetric_barrier_corner']]).T
 
         # 从onboard激光雷达点云中提取墙面
-        # FIXME: 这里有错误，原来这样做是在毫米波雷达坐标系下
+        # FIXME: 这里有错误，原来这样做是在毫米波雷达坐标系下，但凑巧没事
         onboard_walls, onboard_points = L_open_corner(robot_laser_list[i][2])
         tar = np.array([onboard_points['barrier_corner'], onboard_points['symmetric_barrier_corner']]).T
 
@@ -223,6 +225,6 @@ ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
     init_func=init_fig, repeat=False, save_count=1000
 )
-ani.save(f"{out_path}/gifs/{file_name}-reg3.gif", writer='pillow')
+ani.save(f"{out_path}/gifs/{file_name}-regis.gif", writer='pillow')
 
 fwrite.close()
