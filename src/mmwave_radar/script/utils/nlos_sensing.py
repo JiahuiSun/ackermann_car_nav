@@ -369,3 +369,37 @@ def fit_line_ransac(points, max_iter=200, sigma=0.03):
     reg = LinearRegression().fit(inliers[:, :1], inliers[:, 1])
     coef = [reg.coef_[0], reg.intercept_]
     return coef, best_inlier_mask
+
+
+def registration(src, tar):
+    """Compute R and T from source points to target points.
+    R.dot(src) + T = tar
+    Args:
+        source: (2, N)
+        target: (2, N)
+    Returns:
+        R: (2, 2)
+        T: (2, 1)
+    """
+    src_avg = np.mean(src, axis=-1, keepdims=True)
+    tar_avg = np.mean(tar, axis=-1, keepdims=True)
+    src -= src_avg
+    tar -= tar_avg
+    S = src.dot(tar.T)
+    U, Sigma, Vh = np.linalg.svd(S)
+    R = U.dot(Vh).T
+    T = tar_avg - R.dot(src_avg)
+    return R, T
+
+
+if __name__ == '__main__':
+    src = np.random.randn(2, 2)
+    theta = 68 * np.pi / 180
+    Rt = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+    dt = np.array([[1.], [1.]])
+    tar = Rt.dot(src) + dt
+    R, T = registration(src, tar)
+    print(Rt)
+    print(R)
+    print(dt)
+    print(T)

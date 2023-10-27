@@ -4,9 +4,13 @@ import matplotlib.pyplot as plt
 import rosbag
 from sensor_msgs import point_cloud2
 from nlos_sensing import pc_filter
+import os
 
 
-file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-C3_2023-10-01-21-30-52"
+file_path = "/home/agent/Code/ackermann_car_nav/data/20230626/exp01_2023-06-26-19-21-33"
+out_path = "/home/agent/Code/ackermann_car_nav/data/tmp"
+file_name = file_path.split('/')[-1].split('.')[0][:-20]
+os.makedirs(f"{out_path}/gifs", exist_ok=True)
 robot_range = [-2.1, 0, -3, 0]  # 切割小车
 gt_range = [-8, 0, -0.3, 1.5]  # 切割人的点云
 gt_range1 = [-8, 0, -0.3, 0.7]  # 切割人的点云
@@ -20,14 +24,13 @@ def init_fig():
     ax.clear()
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
-    ax.set_xlim([-8, 0])
+    ax.set_xlim([-7, 3])
     ax.set_ylim([-3, 2])
     ax.tick_params(direction='in')
 
 
 def gen_data():
-    for topic, msg, t in rosbag.Bag(
-        f"{file_path}.bag", 'r'):
+    for topic, msg, t in rosbag.Bag(f"{file_path}.bag", 'r'):
         if topic == '/laser_point_cloud2':
             points = point_cloud2.read_points_list(
                 msg, field_names=['x', 'y']
@@ -58,7 +61,7 @@ def visualize(result):
 
 ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
-    init_func=init_fig, repeat=False, save_count=2000
+    init_func=init_fig, repeat=False, save_count=1000
 )
-ani.save(f"{file_path}-gt.gif", writer='pillow')
+ani.save(f"{out_path}/gifs/{file_name}-laser.gif", writer='pillow')
 # plt.show()
