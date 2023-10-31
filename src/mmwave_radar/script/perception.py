@@ -30,7 +30,10 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     # 把毫米波雷达原始数据变成热力图和点云
     adc_pack = struct.pack(f">{frame_bytes}b", *radar_adc_data.data)
     adc_unpack = np.frombuffer(adc_pack, dtype=np.int16)
-    RA_cart, mmwave_point_cloud = gen_point_cloud_plan3(adc_unpack)
+    result = gen_point_cloud_plan3(adc_unpack)
+    if result is None:
+        return
+    RA_cart, mmwave_point_cloud = result
     msg = PointCloud2()
     msg.header = radar_adc_data.header
     msg.height = 1
@@ -45,7 +48,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     msg.point_step = 16
     msg.row_step = msg.point_step * mmwave_point_cloud.shape[0]
     msg.is_dense = True
-    msg.data = mmwave_point_cloud.astype(np.float32).tostring()
+    msg.data = mmwave_point_cloud.astype(np.float32).tobytes()
     radar_pc_pub.publish(msg)
 
     # 小车激光雷达提取墙面和关键点
@@ -101,16 +104,17 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     msg.point_step = 8
     msg.row_step = msg.point_step * gt_laser_pc_trans.shape[0]
     msg.is_dense = True
-    msg.data = gt_laser_pc_trans.astype(np.float32).tostring()
+    msg.data = gt_laser_pc_trans.astype(np.float32).tobytes()
     gt_pc_pub.publish(msg)
 
     # 目标检测
     # 加载模型，把RA热力图输入模型，通过nms得到结果
     RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
-    img = np.concatenate([RA_cart, RA_cart, RA_cart], axis=-1).transpose(2, 0, 1)
-    img = torch.from_numpy(img).to(device)
+    img = RA_cart.transpose(2, 0, 1)
+    img = torch.from_numpy(img).float().to(device)
     img = img[None]
-    pred = model(img)
+    with torch.no_grad():
+        pred = model(img)
     pred_bbox = postprocess(pred, anchors, img_size)
     detections = nms_single_class(pred_bbox.cpu().numpy(), conf_thres, nms_thres)[0]
 
@@ -132,7 +136,8 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
             xyxy_real[1] = xyxy[1] * range_res
             xyxy_real[2] = (xyxy[2]-H)*range_res
             xyxy_real[3] = xyxy[3] * range_res
-            xyxy_real = line_symmetry_point(onboard_walls['far_wall'], xyxy_real)
+            xyxy_real[:2] = line_symmetry_point(onboard_walls['far_wall'], xyxy_real[:2])
+            xyxy_real[2:] = line_symmetry_point(onboard_walls['far_wall'], xyxy_real[2:])
             # 发布RVIZ
             marker = Marker()
             marker.header = radar_adc_data.header
@@ -169,12 +174,12 @@ if __name__ == '__main__':
     onboard_lidar_sub = message_filters.Subscriber('laser_point_cloud', PointCloud2)
     radar_sub = message_filters.Subscriber('mmwave_radar_raw_data', adcData)
 
-    model_path = "/home/agent/Code/yolov3_my/output/20231014_230952/model/model-99.pth"
+    model_path = "/home/agent/Code/yolov3_my/output/20231031_144012/model/model-99.pth"
     device = "cuda:0"
     anchors = torch.tensor([[10, 13], [16, 30], [33, 23]])
     img_size = [160, 320]
     conf_thres, nms_thres = 0.5, 0.4
-    model = Darknet()
+    model = Darknet().to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
     local_sensing_range = [-0.5, 5, -3, 3]  # 切割小车周围点云
