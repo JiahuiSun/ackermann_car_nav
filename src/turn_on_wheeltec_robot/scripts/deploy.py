@@ -1,6 +1,6 @@
 import rospy
 import message_filters
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import LaserScan
 from sensor_msgs import point_cloud2
 from geometry_msgs.msg import Twist
 
@@ -10,6 +10,7 @@ from torch.distributions import Independent, Normal
 from train.network import Actor
 import train.utils as utils
 import sys, select, termios, tty
+import argparse
 
 import math
 
@@ -26,7 +27,7 @@ class deployment:
         self.actor.load_state_dict(th.load(config['actor_path'], map_location=config['device']))
         self.actor.eval()
 
-        self.laser_sub = rospy.Subscriber('/laser_point_cloud', PointCloud2, self.callback_pointcloud, queue_size=5)
+        self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.callback_pointcloud, queue_size=1000)
         self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=5)
 
         self.wheel_base = config['wheel_base']
@@ -82,7 +83,7 @@ class deployment:
         self.move_cmd.angular.z = angular_velocity
 
     def callback_pointcloud(self, msg):
-        assert isinstance(msg, PointCloud2)
+        assert isinstance(msg, LaserScan)
 
         self.key = self.getKey()
         if self.key == 's':
@@ -90,12 +91,29 @@ class deployment:
         if self.key == ' ':
             self.stop = True
         
-        points = list(point_cloud2.read_points_list(msg, field_names=("x", "y", "z")))
+        angle = 0
+        angle_increment = msg.angle_increment
+        points = []
+        for i in range(len(msg.ranges)):
+            r = msg.ranges[i]
+            if r == float('inf'):
+                if msg.ranges[i-1] != float('inf'):
+                    r = msg.ranges[i-1]
+                elif msg.ranges[(i+1)%len(msg.ranges)] != float('inf'):
+                    r = msg.ranges[(i+1)%len(msg.ranges)]
+                else:
+                    r = 10
+            x = r * np.cos(angle)
+            y = r * np.sin(angle)
+            points.append([-x, -y])
+            angle += angle_increment
 
-        grid = np.full((self.map_side_block_num, self.map_side_block_num), -1)
-        obs = utils.map_lidar_pointcloud(grid, points, self.map_side_block_num, self.map_len)
-        np.save('obsnpy/obs.npy', obs)
+        bev = np.zeros((256, 256, 3))
+        bev = utils.map_lidar_pointcloud(bev, points, 256, 8)
+        bev = utils.map_self(bev, 256, 8, [0.39, 0.24])
+        obs = np.transpose(bev, (2, 0, 1))
         obs = obs.squeeze()
+        # utils.image_visualization(obs)
         action, _, _, _ = self.get_action(obs[np.newaxis,:])
         mapped_action = self.map_action(action)
         self.apply_action(mapped_action)
@@ -107,16 +125,22 @@ class deployment:
                 self.move_cmd.linear.x = 0
                 self.move_cmd.angular.z = 0
             self.cmd_vel_pub.publish(self.move_cmd)
-            #print(self.move_cmd)
+            # print(self.move_cmd)
             rate.sleep()
 
 
 if __name__ == '__main__':
+    paser = argparse.ArgumentParser()
+    paser.add_argument('-p', '--policy', type=str, default='left')
+
+
+    args = paser.parse_args()
+    
     config = {
         'device': 'cuda' if th.cuda.is_available() else 'cpu',
-        'actor_path': 'scripts/actor.pth',
-        'map_side_block_num': 224,
-        'map_len': 18,
+        'actor_path': 'scripts/left.pth',
+        'map_side_block_num': 256,
+        'map_len': 8,
         'act_dim': 2,
         'wheel_base': 0.324,
         'linear_velocity_ratio': 0.6944,
@@ -124,6 +148,11 @@ if __name__ == '__main__':
         'max_v': 0.4,
         'max_w': math.pi/5,
     }
+
+    if args.policy == 'left':
+        config['actor_path'] = 'scripts/left.pth'
+    elif args.policy == 'right':
+        config['actor_path'] = 'scripts/right.pth'
 
     try:
         deploy = deployment(config)

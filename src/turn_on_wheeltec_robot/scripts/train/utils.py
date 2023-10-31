@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch as th
 import math
 import random
+from PIL import Image
 
 
 def sample_points(box, points_num):
@@ -69,7 +70,7 @@ def visualize_grid_map(grid_data, cmap='viridis'):
     plt.show()
 
 
-def bresenham(grid, x0, y0, x1, y1, flag):
+def bresenham(grid, x0, y0, x1, y1, n, flag):
     dx = abs(x1 - x0)
     dy = abs(y1 - y0)
     sx = -1 if x0 > x1 else 1
@@ -77,7 +78,8 @@ def bresenham(grid, x0, y0, x1, y1, flag):
     err = dx - dy
 
     while True:
-        grid[x0][y0] = flag
+        if 0 <= x0 < n and 0 <= y0 < n:
+            grid[x0][y0] = flag
         if x0 == x1 and y0 == y1:
             break
         e2 = 2 * err
@@ -88,82 +90,119 @@ def bresenham(grid, x0, y0, x1, y1, flag):
             err += dx
             y0 += sy
 
+def intersection(x1, y1, x2, y2, x3, y3, x4, y4, type='line'):
+    # Calculate the slopes and y-intercepts of the two lines
+    m1 = (y2 - y1) / (x2 - x1) if x2 - x1 != 0 else float('inf')
+    b1 = y1 - m1 * x1 if x2 - x1 != 0 else x1
+    m2 = (y4 - y3) / (x4 - x3) if x4 - x3 != 0 else float('inf')
+    b2 = y3 - m2 * x3 if x4 - x3 != 0 else x3
 
-# def bresenham_2(x0, y0, x1, y1):
-#     side = []
-#     dx = abs(x1 - x0)
-#     dy = abs(y1 - y0)
-#     sx = -1 if x0 > x1 else 1
-#     sy = -1 if y0 > y1 else 1
-#     err = dx - dy
+    # Check if the lines are parallel
+    if m1 == m2:
+        return None
 
-#     while True:
-#         side.append((x0, y0))
-#         if x0 == x1 and y0 == y1:
-#             break
-#         e2 = 2 * err
-#         if e2 > -dy:
-#             err -= dy
-#             x0 += sx
-#         if e2 < dx:
-#             err += dx
-#             y0 += sy
+    # Calculate the intersection point
+    if m1 == float('inf'):
+        x = x1
+        y = m2 * x + b2
+    elif m2 == float('inf'):
+        x = x3
+        y = m1 * x + b1
+    else:
+        x = (b2 - b1) / (m1 - m2)
+        y = m1 * x + b1
 
-#     return side
+    # Check if the intersection point is within the bounds of both line segments
+    if type == 'line':
+        if (x < min(x1, x2) or x > max(x1, x2)) and x1 != x2:
+            return None
+        if (y < min(y1, y2) or y > max(y1, y2)) and y1 != y2:
+            return None
+        if (x < min(x3, x4) or x > max(x3, x4)) and x3 != x4:
+            return None
+        if (y < min(y3, y4) or y > max(y3, y4)) and y3 != y4:
+            return None
+    elif type == 'ray':
+        if (x-x1)*(x2-x1) < 0 or (y-y1)*(y2-y1) < 0:
+            return None
+        if (x < min(x3, x4) or x > max(x3, x4)) and x3 != x4:
+            return None
+        if (y < min(y3, y4) or y > max(y3, y4)) and y3 != y4:
+            return None
+
+    p = [x, y]
+    return p
+
+def find_intersection_point(x_min, x_max, y_min, y_max, point):
+    x = point[0]
+    y = point[1]
+    p1 = intersection(0, 0, x, y, x_min, y_min, x_min, y_max)
+    if p1 != None:
+        return p1
+    p2 = intersection(0, 0, x, y, x_min, y_min, x_max, y_min)
+    if p2 != None:
+        return p2
+    p3 = intersection(0, 0, x, y, x_max, y_min, x_max, y_max)
+    if p3 != None:
+        return p3
+    p4 = intersection(0, 0, x, y, x_min, y_max, x_max, y_max)
+    if p4 != None:
+        return p4
 
 
-# def map_robot_pos(grid, n, l, pos, theta, size):
-#     d = l / n
-#     corners = [
-#         (int((pos[0] + size[0] / 2 * math.cos(theta) - size[1] / 2 * math.sin(theta)) // d),
-#          int((pos[1] + size[0] / 2 * math.sin(theta) + size[1] / 2 * math.cos(theta)) // d)),
-#         (int((pos[0] + size[0] / 2 * math.cos(theta) + size[1] / 2 * math.sin(theta)) // d),
-#          int((pos[1] + size[0] / 2 * math.sin(theta) - size[1] / 2 * math.cos(theta)) // d)),
-#         (int((pos[0] - size[0] / 2 * math.cos(theta) - size[1] / 2 * math.sin(theta)) // d),
-#          int((pos[1] - size[0] / 2 * math.sin(theta) + size[1] / 2 * math.cos(theta)) // d)),
-#         (int((pos[0] - size[0] / 2 * math.cos(theta) + size[1] / 2 * math.sin(theta)) // d),
-#          int((pos[1] - size[0] / 2 * math.sin(theta) - size[1] / 2 * math.cos(theta)) // d))
-#     ]
-#     side1 = bresenham_2(corners[0][0], corners[0][1], corners[1][0], corners[1][1])
-#     side2 = bresenham_2(corners[2][0], corners[2][1], corners[3][0], corners[3][1])
+    return None
 
-#     for i in range(len(side1)):
-#         for j in range(len(side2)):
-#             bresenham(grid, side1[i][0], side1[i][1], side2[j][0], side2[j][1], 0)
-
-#     return grid
-
-
-# def map_wall_pos(grid, n, l, wall):
-#     d = l / n
-#     x1, y1, x0, y0 = wall
-#     bresenham(grid, int(x0 // d), int(n - 1), int(x0 // d), int(y0 // d), -1)
-#     bresenham(grid, int(0), int(y0 // d), int(x0 // d), int(y0 // d), -1)
-#     bresenham(grid, int(x1 // d), int(n - 1), int(x1 // d), int(y1 // d), -1)
-#     bresenham(grid, int(0), int(y1 // d), int(x1 // d), int(y1 // d), -1)
-
-#     for i in range(0, int(x0 // d)):
-#         for j in range(int(y0 // d), n):
-#             grid[i][j] = -1
-
-#     return grid
 
 def map_lidar_pointcloud(grid, points, n, l):
+
+    # black = [0, 0 ,0]
+    # blue = [0, 0, 255]
+    gray = [128, 128, 128]
+    gray = np.array(gray)
     d = l / n
-    x_min, x_max = -l / 2, l / 2
+    x_min, x_max = -l / 8, 7 * l / 8
     y_min, y_max = -l / 2, l / 2
-    cx, cy = n // 2, n // 2
+    cx, cy = n // 8, n // 2
     if points == None:
         return grid
     for point in points:
-        x = point[0]
-        y = point[1]
-        if x_min <= x < x_max and y_min <= y < y_max:
+        if x_min <= point[0] < x_max and y_min <= point[1] < y_max:
+            x = point[0]
+            y = point[1]
+
             i = int((x - x_min) // d)
             j = int((y - y_min) // d)
-            if grid[i][j] != 1:
-                bresenham(grid, cx, cy, i, j, 0)
-                grid[i][j] = 1   
+            if i >= n:
+                i = n - 1
+            if j >= n:
+                j = n - 1
+
+            # s = find_intersection_point(x_min, x_max, y_min, y_max, point)
+            # sx, sy = s
+
+            # si = int((sx - x_min) // d)
+            # sj = int((sy - y_min) // d)
+
+            bresenham(grid, cx, cy, i, j, n, gray)
+
+        else:
+            s = find_intersection_point(x_min, x_max, y_min, y_max, point)
+            sx, sy = s
+
+            si = int((sx - x_min) // d)
+            sj = int((sy - y_min) // d)    
+
+            if si >= n:
+                si = n - 1
+            if sj >= n:
+                sj = n - 1
+
+            bresenham(grid, cx, cy, si, sj, n, gray)
+
+
+
+
+
     return grid
 
 
@@ -186,6 +225,22 @@ def map_radar_res(grid, theta, n, l, radar_res, pos):
                         grid[i][j] = 2
 
     return grid
+
+def map_self(grid, n, l, size):
+    red = [255, 0, 0]
+    red = np.array(red)
+    d = l / n
+    cx, cy = n // 8, n // 2
+
+    cl, cw = size[0], size[1]
+    nl = int(cl // d)
+    nw = int(cw // d)
+    for i in range(cx - nl // 2, cx + nl // 2):
+        for j in range(cy - nw // 2, cy + nw // 2):
+            grid[i][j] = red 
+    
+    return grid
+
 
 def area_corner_obstacles_getting(robot_pos, robot_vel):
     x = robot_pos[0]
@@ -589,3 +644,12 @@ class DecayThenFlatSchedule(object):
             return min(self.start, max(self.finish, np.exp(- T / self.exp_scaling)))
         else:
             raise Exception("No such decay method.")
+        
+def image_visualization(grid):
+    x = y = 256
+    im = Image.new("RGB", (x, y))
+    for i in range(x):
+        for j in range(y):
+            im.putpixel((255 - j, 255-i), (int(grid[0][i][j]), int(grid[1][i][j]), int(grid[2][i][j])))
+    # im.show()
+    im.save('test_obs.png')

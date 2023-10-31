@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import message_filters
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs import point_cloud2
@@ -34,6 +35,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     if result is None:
         return
     RA_cart, mmwave_point_cloud = result
+    # 发布毫米波雷达点云
     msg = PointCloud2()
     msg.header = radar_adc_data.header
     msg.height = 1
@@ -60,7 +62,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     onboard_laser_pc = np.array([x_pos, y_pos]).T
     # 激光雷达->小车
     onboard_laser_pc_trans = transform(onboard_laser_pc, 0.08, 0, 180)
-    # 小车激光雷达只保留小车附近的点
+    # 小车激光雷达只保留小车附近的点，太远的点没用还会增加干扰
     onboard_laser_pc_trans = pc_filter(onboard_laser_pc_trans, *local_sensing_range)
     # 小车->毫米波雷达
     onboard_laser_pc_trans = transform_inverse(onboard_laser_pc_trans, 0.17, 0, 360-90)
@@ -108,7 +110,6 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     gt_pc_pub.publish(msg)
 
     # 目标检测
-    # 加载模型，把RA热力图输入模型，通过nms得到结果
     RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
     img = RA_cart.transpose(2, 0, 1)
     img = torch.from_numpy(img).float().to(device)
@@ -117,6 +118,8 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
         pred = model(img)
     pred_bbox = postprocess(pred, anchors, img_size)
     detections = nms_single_class(pred_bbox.cpu().numpy(), conf_thres, nms_thres)[0]
+    if detections is None:
+        return
 
     # 再用NLOS过滤一下结果
     final_det = []
@@ -174,8 +177,8 @@ if __name__ == '__main__':
     onboard_lidar_sub = message_filters.Subscriber('laser_point_cloud', PointCloud2)
     radar_sub = message_filters.Subscriber('mmwave_radar_raw_data', adcData)
 
-    model_path = "/home/agent/Code/yolov3_my/output/20231031_144012/model/model-99.pth"
-    device = "cuda:0"
+    model_path = "/home/dingrong/Downloads/model-99.pth"
+    device = "cpu"
     anchors = torch.tensor([[10, 13], [16, 30], [33, 23]])
     img_size = [160, 320]
     conf_thres, nms_thres = 0.5, 0.4
@@ -187,7 +190,7 @@ if __name__ == '__main__':
 
     gt_pc_pub = rospy.Publisher("laser_point_cloud_gt", PointCloud2, queue_size=10)
     pred_bbox_pub = rospy.Publisher("pred_bbox", Marker, queue_size=10)
-    radar_pc_pub = rospy.Publisher("mmwave_radar_point_cloud", PointCloud2, queue_size=10)
+    radar_pc_pub = rospy.Publisher("radar_point_cloud", PointCloud2, queue_size=10)
     ts = message_filters.ApproximateTimeSynchronizer([gt_lidar_sub, onboard_lidar_sub, radar_sub], 10, 0.05)
     ts.registerCallback(perception)
     rospy.spin()

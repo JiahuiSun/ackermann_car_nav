@@ -82,21 +82,19 @@ class SharedNetwork(nn.Module):
 
 
 class Actor(nn.Module):
-    def __init__(self, input_dim, output_dim, middle_dim=512):
+    def __init__(self, input_dim, output_dim):
         super(Actor, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.CNN2D = CNN2D(input_dim, middle_dim)
-        self.share = SharedNetwork(input_dim, middle_dim)
-        self.fc1 = nn.Linear(middle_dim, 512)
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2, padding=1)
+        self.max_pool1 = nn.MaxPool2d(kernel_size=3, stride=3)
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=2, padding=1)
+        self.conv4 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, stride=2, padding=1)
+        self.max_pool2 = nn.MaxPool2d(kernel_size=3, stride=2)
+        self.fc1 = nn.Linear(256 * 2 * 2, 512)
         self.fc2 = nn.Linear(512, 256)
-        # self.net = nn.Sequential(
-        #     nn.Linear(middle_dim, 512),
-        #     nn.Tanh(),
-        #     nn.Linear(512, 256),
-        #     nn.Tanh()
-        # )
-        self.mu = nn.Linear(512, output_dim)
+        self.mu = nn.Linear(256, output_dim)
         self.sigma = nn.Parameter(torch.zeros(output_dim, 1))
         nn.init.constant_(self.sigma, -0.1)
         
@@ -107,14 +105,23 @@ class Actor(nn.Module):
     
     def forward(self, obs):
         """Mapping: obs -> logits -> (mu, sigma)."""
-        logits = self.CNN2D(obs)
-        # x = torch.tanh(self.fc1(x))
-        # logits = torch.tanh(self.fc2(x))
+        x = F.relu(self.conv1(obs))
+        x = F.relu(self.conv2(x))
+        x = self.max_pool1(x)
+        x = F.relu(self.conv3(x))
+        x = F.relu(self.conv4(x))
+        x = self.max_pool2(x)
+        x = x.view(-1, 256 * 2 * 2)
+        x = F.relu(self.fc1(x))
+        logits = F.relu(self.fc2(x))
         mu = self.mu(logits)
         shape = [1] * len(mu.shape)
         shape[1] = -1
         sigma = (self.sigma.view(shape) + torch.zeros_like(mu)).exp()
         return mu, sigma
+
+
+       
 
 
 class RecurrentActor(nn.Module):
@@ -192,9 +199,13 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.CNN = CNN2D(input_dim, middle_dim)
-        # self.share = SharedNetwork(input_dim, middle_dim)
-        self.fc1 = nn.Linear(middle_dim, 512)
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2, padding=1)
+        self.max_pool1 = nn.MaxPool2d(kernel_size=3, stride=3)
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=2, padding=1)
+        self.conv4 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, stride=2, padding=1)
+        self.max_pool2 = nn.MaxPool2d(kernel_size=3, stride=2)
+        self.fc1 = nn.Linear(256 * 2 * 2, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, output_dim)
         if config['orth_init']:
@@ -203,9 +214,15 @@ class Critic(nn.Module):
             orthogonal_init(self.fc3)
     
     def forward(self, obs):
-        x = self.CNN(obs)
-        x = torch.tanh(self.fc1(x))
-        x = torch.tanh(self.fc2(x))
+        x = F.relu(self.conv1(obs))
+        x = F.relu(self.conv2(x))
+        x = self.max_pool1(x)
+        x = F.relu(self.conv3(x))
+        x = F.relu(self.conv4(x))
+        x = self.max_pool2(x)
+        x = x.view(-1, 256 * 2 * 2)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
         logits = self.fc3(x)
         return logits
 

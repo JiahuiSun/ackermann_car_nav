@@ -5,7 +5,7 @@
 	<arg name="frame_len" default="196608" doc="the number of bytes per frame" />
 
 	<!-- 启动生成毫米波点云节点 -->
-	<node pkg="mmwave_radar" type="mmwave_proc.py" name="mmwave_proc" args="$(arg xwr_config)" output="screen" /> 
+	<node pkg="mmwave_radar" type="perception.py" name="perception" output="screen" />
 	<!-- DCA1000配置和接收毫米波原始数据 -->
 	<node pkg="mmwave_radar" type="mmwave_radar_ctrl" name="mmwave_radar_ctrl" args="fpga $(arg dca_config)" output="screen" /> 
 	<node pkg="mmwave_radar" type="mmwave_radar_record" name="mmwave_radar_record" args="start_record $(arg dca_config) $(arg frame_len)" output="screen" /> 

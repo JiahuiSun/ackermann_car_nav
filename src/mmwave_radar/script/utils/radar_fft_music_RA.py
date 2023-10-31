@@ -5,7 +5,7 @@ from .music import aoa_music_1D_mat
 import pandas as pd
 
 
-xwr_cfg = "/home/agent/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
+xwr_cfg = "/home/dingrong/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
 for line in open(xwr_cfg):
     line = line.rstrip('\r\n')
     if line.startswith('profileCfg'):
