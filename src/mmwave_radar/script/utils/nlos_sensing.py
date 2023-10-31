@@ -2,6 +2,26 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
+def xyxy2xywh(xyxy):
+    """
+    Args:
+        xyxy: (4,)
+    Returns:
+        xywh: (4,)
+    """
+    if len(xyxy.shape) == 1:
+        xywh = np.array([
+            (xyxy[0]+xyxy[2])/2, (xyxy[1]+xyxy[3])/2, np.abs(xyxy[0]-xyxy[2]), np.abs(xyxy[1]-xyxy[3])
+        ])
+    else:
+        xywh = np.zeros_like(xyxy)
+        xywh[:, 0] = (xyxy[:, 0] + xyxy[:, 2]) / 2
+        xywh[:, 1] = (xyxy[:, 1] + xyxy[:, 3]) / 2
+        xywh[:, 2] = np.abs(xyxy[:, 0] - xyxy[:, 2])
+        xyxy[:, 3] = np.abs(xyxy[:, 1] - xyxy[:, 3])
+    return xywh
+
+
 def pc_filter(pc, x_min, x_max, y_min, y_max):
     """
     Arguments:

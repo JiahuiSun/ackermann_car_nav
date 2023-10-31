@@ -87,6 +87,7 @@ def gen_point_cloud_plan3(adc_data):
     if len(pairs) < 1:
         return None
     ranges, azimuths = pairs[:, 0], pairs[:, 1]
+    snrs = RA_log[ranges, azimuths] - noise_floor[ranges, azimuths]
 
     # RD转化到笛卡尔坐标系下可视化
     axis_range = np.arange(H).reshape(-1, 1) * range_res
@@ -116,7 +117,7 @@ def gen_point_cloud_plan3(adc_data):
 
     x_pos = ranges * np.cos(azimuths)
     y_pos = ranges * np.sin(azimuths)
-    point_cloud = np.array([x_pos, y_pos, dopplers]).T
+    point_cloud = np.array([x_pos, y_pos, dopplers, snrs]).T
 
     # 增加速度特征
     # xs_idx2 = (x_pos // range_res).astype(np.int32) + H

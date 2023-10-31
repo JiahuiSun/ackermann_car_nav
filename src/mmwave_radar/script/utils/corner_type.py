@@ -46,6 +46,10 @@ def fit_lines(laser_pc, n_line=2):
 
 def L_open_corner(laser_pc_onboard):
     """输入毫米波坐标系下小车激光雷达点云，输出转角各个墙面的直线和关键点
+    规定：
+        barrier wall平行线和far wall相交，右边是anchor1,左边是anchor2; 
+        far wall平行线和barrier wall相交，上面是anchor3,下面是anchor4;
+    
     Args:
         laser_pc_onboard: (N, 2)
     Returns:
@@ -75,6 +79,17 @@ def L_open_corner(laser_pc_onboard):
     inter1 = intersection_of_2line(line_by_radar_and_corner, far_wall)
     inter2 = intersection_of_2line(line_by_radar_and_corner, line_by_far_wall_and_symmtric_corner)
     inter3 = line_symmetry_point(far_wall, inter2)
+
+    # 用barrier wall和far wall创造出4个不共线的点
+    coef1, coef2 = parallel_line_distance(barrier_wall, 1.0)
+    anchor1 = intersection_of_2line(coef1, far_wall)
+    anchor2 = intersection_of_2line(coef2, far_wall)
+    reference_point1, reference_point2 = (anchor1, anchor2) if anchor1[0] > anchor2[0] else (anchor2, anchor1)
+    coef1, coef2 = parallel_line_distance(far_wall, 1.0)
+    anchor3 = intersection_of_2line(coef1, barrier_wall)
+    anchor4 = intersection_of_2line(coef2, barrier_wall)
+    reference_point3, reference_point4 = (anchor3, anchor4) if anchor3[1] > anchor4[1] else (anchor4, anchor3)
+
     walls = {
         'far_wall': far_wall,
         'far_wall_pc': far_wall_pc,
@@ -86,7 +101,8 @@ def L_open_corner(laser_pc_onboard):
         'symmetric_barrier_corner': symmtric_barrier_corner,
         'inter1': inter1,
         'inter2': inter2,
-        'inter3': inter3
+        'inter3': inter3,
+        'reference_points': np.array([reference_point1, reference_point2, reference_point3, reference_point4])
     }
     return walls, key_points
 
@@ -140,11 +156,15 @@ def L_open_corner_onboard(laser_pc_onboard):
 
 def L_open_corner_gt(laser_pc_gt):
     """输入GT激光雷达坐标系下的点云，输出转角各个墙面的直线和关键点
+    规定：
+        barrier wall平行线和far wall相交，右边是anchor1,左边是anchor2; 
+        far wall平行线和barrier wall相交，上面是anchor3,下面是anchor4;
+
     Args:
         laser_pc_gt: (N, 2)
     Returns:
         walls: 各个墙面参数和点云
-        key_points: 转角坐标，2个相关坐标
+        key_points: 转角坐标，4个相关坐标
     """
     # 提取墙面
     fitted_lines, remaining_pc = fit_lines(laser_pc_gt, 2)

@@ -168,6 +168,7 @@ for i in range(len(gt_laser_list)):
     # 用gt_laser提取小车位姿
     laser_frame = gt_laser_list[i][2]
     # 从GT激光雷达点云中提取墙面
+    # NOTE: 为什么要filter？因为不filter可能障碍物的直线点更多
     gt_laser_pc = pc_filter(laser_frame, *gt_sensing_range)
     gt_walls, gt_points = L_open_corner_gt(gt_laser_pc)
     src = gt_points['reference_points'].T
