@@ -13,6 +13,7 @@ from utils.radar_fft_music_RA import *
 from utils.corner_type import L_open_corner, L_open_corner_gt
 from utils.nlos_sensing import pc_filter, isin_triangle, line_symmetry_point, transform, transform_inverse, registration
 from utils.postprocess import postprocess, nms_single_class
+from model.model import Darknet
 
 
 def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
@@ -173,7 +174,9 @@ if __name__ == '__main__':
     anchors = torch.tensor([[10, 13], [16, 30], [33, 23]])
     img_size = [160, 320]
     conf_thres, nms_thres = 0.5, 0.4
-    model = torch.load(model_path, map_location=device)
+    model = Darknet()
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
     local_sensing_range = [-0.5, 5, -3, 3]  # 切割小车周围点云
     gt_sensing_range = [-4, 2, -4, 3]  # 切割gt周围点云
 

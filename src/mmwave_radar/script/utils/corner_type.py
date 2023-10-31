@@ -1,8 +1,8 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
 
-from nlos_sensing import fit_line_ransac, find_end_point, line_symmetry_point, parallel_line_distance
-from nlos_sensing import intersection_of_2line, line_by_coef_p, get_span, line_by_2p
+from .nlos_sensing import fit_line_ransac, find_end_point, line_symmetry_point, parallel_line_distance
+from .nlos_sensing import intersection_of_2line, line_by_coef_p, get_span, line_by_2p
 
 
 def fit_lines(laser_pc, n_line=2):
