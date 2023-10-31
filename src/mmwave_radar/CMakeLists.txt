@@ -202,6 +202,7 @@ catkin_install_python(PROGRAMS
   script/xwr_start.py
   script/xwr_stop.py
   script/mmwave_proc.py
+  script/perception.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
