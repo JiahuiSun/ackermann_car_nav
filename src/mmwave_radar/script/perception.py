@@ -9,6 +9,7 @@ from mmwave_radar.msg import adcData
 import rospy
 import torch
 import struct
+import time
 
 from utils.radar_fft_music_RA import *
 from utils.corner_type import L_open_corner, L_open_corner_gt
@@ -28,6 +29,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     7. 过滤和映射NLOS的bbox——毫米波雷达坐标系
     8. 可视化所有结果，需要的话，把结果转换到小车坐标系下
     """
+    st1 = time.time()
     # 把毫米波雷达原始数据变成热力图和点云
     adc_pack = struct.pack(f">{frame_bytes}b", *radar_adc_data.data)
     adc_unpack = np.frombuffer(adc_pack, dtype=np.int16)
@@ -53,6 +55,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     msg.data = mmwave_point_cloud.astype(np.float32).tobytes()
     radar_pc_pub.publish(msg)
 
+    st2 = time.time()
     # 小车激光雷达提取墙面和关键点
     points = point_cloud2.read_points_list(
         onboard_laser_pc_msg, field_names=['x', 'y']
@@ -77,6 +80,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     mask = isin_triangle(onboard_points['symmetric_barrier_corner'], onboard_points['inter2'], \
                          onboard_points['inter1'], pos).astype(np.float32).reshape(H, 2*H)
 
+    st3 = time.time()
     # GT激光雷达提取墙面和关键点
     points = point_cloud2.read_points_list(
         gt_laser_pc_msg, field_names=['x', 'y']
@@ -109,6 +113,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     msg.data = gt_laser_pc_trans.astype(np.float32).tobytes()
     gt_pc_pub.publish(msg)
 
+    st4 = time.time()
     # 目标检测
     RA_cart = (RA_cart - RA_cart.min()) / (RA_cart.max() - RA_cart.min())
     img = RA_cart.transpose(2, 0, 1)
@@ -121,6 +126,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
     if detections is None:
         return
 
+    st5 = time.time()
     # 再用NLOS过滤一下结果
     final_det = []
     for det in detections:
@@ -169,6 +175,8 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data):
             marker.color.b = 1.0
             marker.color.a = 1.0
             pred_bbox_pub.publish(marker)
+    end = time.time()
+    print(f"total:{end-st1:.2f}; RA generation:{st2-st1:.2f} onboard_lidar_fit:{st3-st2:.2f} gt_lidar_fit:{st4-st3:.2f} object detection:{st5-st4:.2f} NLOSfilter:{end-st5:.2f}")
 
 
 if __name__ == '__main__':
