@@ -1,6 +1,5 @@
 import numpy as np
 import numpy.linalg as LA
-import warnings
 
 
 def cov_matrix(x):

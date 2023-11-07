@@ -1,8 +1,9 @@
 import numpy as np
 import mmwave.dsp as dsp
 from mmwave.dsp.utils import Window
-from .music import aoa_music_1D_mat
 import pandas as pd
+
+from music import aoa_music_1D_mat
 
 
 xwr_cfg = "/home/dingrong/Code/ackermann_car_nav/src/mmwave_radar/config/best_range_res.cfg"
