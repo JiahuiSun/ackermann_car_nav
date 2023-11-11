@@ -65,20 +65,26 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     # 提取action
     linear_vel = cmd_vel.linear.x
     angular_vel = cmd_vel.angular.z
-    R = linear_vel / angular_vel
-    angle = np.arctan(wheel_base / R)
+    radius = linear_vel / angular_vel
+    angle = np.arctan(wheel_base / radius)
     speed = linear_vel / linear_velocity_ratio
     action = np.array([speed, angle])
 
     # 提取bbox GT
     key_points, box_hw = bounding_box2(person_pc_2radar, delta_x=0.1, delta_y=0.1)
+    # 只有当人位于NLOS右边才保存label和预测结果
+    inter1, inter3, gt_center = gt_points['inter1'], gt_points['inter3'], key_points[0]
+    if np.cross(inter3-inter1, gt_center-inter1) <= 0:
+        return
+    # 如果label在NLOS内，映射过去
+    if isin_triangle(gt_points['barrier_corner'], inter1, inter3, gt_center):
+        person_pc_2radar = line_symmetry_point(gt_walls['far_wall'], person_pc_2radar)
+        key_points, box_hw = bounding_box2(person_pc_2radar, delta_x=0.1, delta_y=0.1)
     key_points[0, 0] = np.clip(key_points[0, 0], -(H-1)*range_res, (H-1)*range_res)
     key_points[0, 1] = np.clip(key_points[0, 1], 0, (H-1)*range_res)
-    x_norm = (key_points[0, 0]+H*range_res) / (H*2*range_res)
-    y_norm = key_points[0, 1] / (H*range_res)
-    width_norm = box_hw[1] / (H*2*range_res)
-    height_norm = box_hw[0] / (H*range_res)
-    label = [x_norm, y_norm, width_norm, height_norm]
+    label = np.array([
+        [key_points[0, 0]+H*range_res, key_points[0, 1], box_hw[1], box_hw[0]]
+    ])
 
     st4 = time.time()
     # 目标检测
@@ -90,29 +96,8 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
         pred = model(img)
     pred_bbox = postprocess(pred, anchors, img_size)
     detections = nms_single_class(pred_bbox.cpu().numpy(), conf_thres, nms_thres)[0]
-    # TODO: 获得可以计算ap的结果，本质就是原来的代码也做不到啊
-    # 再用NLOS过滤一下结果
-    final_det = []
-    for det in detections:
-        xyxy, conf = det[:4], det[4]
-        pred_center = [(xyxy[0]+xyxy[2])/2, (xyxy[1]+xyxy[3])/2]
-        pred_center = np.array([
-            (pred_center[0]-H)*range_res, pred_center[1]*range_res
-        ])
-        # 一个目标是画图，把bbox在RVIZ上可视化出来；另一个目的是保存检测结果xywh，用来计算map
-        if isin_triangle(onboard_points['symmetric_barrier_corner'], onboard_points['inter2'], \
-                         onboard_points['inter1'], pred_center):
-            final_det.append(xyxy)
 
-            xyxy_real = np.copy(xyxy)
-            xyxy_real[0] = (xyxy[0]-H)*range_res
-            xyxy_real[1] = xyxy[1] * range_res
-            xyxy_real[2] = (xyxy[2]-H)*range_res
-            xyxy_real[3] = xyxy[3] * range_res
-            xyxy_real[:2] = line_symmetry_point(onboard_walls['far_wall'], xyxy_real[:2])
-            xyxy_real[2:] = line_symmetry_point(onboard_walls['far_wall'], xyxy_real[2:])        
     st5 = time.time()
-
     # 把整条轨迹的s、a、pred、label保存下来
     global cnt
     with open(os.path.join(save_dir, f"sample{cnt}.pkl"), 'wb') as f:
@@ -140,7 +125,7 @@ if __name__ == '__main__':
 
     local_sensing_range = [-0.5, 5, -3, 3]  # 切割小车周围点云
     gt_sensing_range = [-4, 2, -4, 3]  # 切割gt周围点云
-    person_range = [-8, 0, -0.3, 1.5]
+    person_range = [-8, 0, -0.3, 1.5]  # 根据实际情况设定
 
     wheel_base = 0.324
     linear_velocity_ratio = 0.6944

@@ -2,6 +2,22 @@ import torch
 import numpy as np
 
 
+def xywh2xyxy(pred):
+    """
+    Args:
+        pred: (..., xywh) or (..., xywhc), 把最后一个维度从xywh变成xyxy
+    Returns:
+        output: (..., xyxy) or (..., xyxyc)
+    """
+    if type(pred) is np.ndarray:
+        output = np.copy(pred).astype(np.float32)
+    else:
+        output = torch.clone(pred).float()
+    output[..., :2] = pred[..., :2] - pred[..., 2:4] / 2
+    output[..., 2:4] = pred[..., :2] + pred[..., 2:4] / 2
+    return output
+
+
 def postprocess(prediction, anchors, img_dim):
     # prediction: [1, 3, 13, 13, 85]
     # targets: [10, 5]
@@ -49,14 +65,9 @@ def nms_single_class(prediction, conf_thres=0.5, nms_thres=0.4):
         output: shape = (B, N, 5)，N是每张图片剩余的bbox
     """
     # xywh->xyxy
-    box_corner = np.zeros_like(prediction)
-    box_corner[:, :, 0] = prediction[:, :, 0] - prediction[:, :, 2] / 2
-    box_corner[:, :, 1] = prediction[:, :, 1] - prediction[:, :, 3] / 2
-    box_corner[:, :, 2] = prediction[:, :, 0] + prediction[:, :, 2] / 2
-    box_corner[:, :, 3] = prediction[:, :, 1] + prediction[:, :, 3] / 2
-    box_corner[:, :, 4] = prediction[:, :, 4]
+    box_corner = xywh2xyxy(prediction)
 
-    output = [None for _ in range(len(box_corner))]
+    output = [np.array([]) for _ in range(len(box_corner))]
     for image_i, image_pred in enumerate(box_corner):
         # 先清除所有置信度小于conf_thres的box
         detections = image_pred[image_pred[:, 4] >= conf_thres]
