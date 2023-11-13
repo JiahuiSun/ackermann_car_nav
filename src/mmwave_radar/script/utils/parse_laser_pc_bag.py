@@ -7,11 +7,12 @@ from nlos_sensing import pc_filter
 import os
 
 
-file_path = "/home/agent/Code/ackermann_car_nav/data/20230626/exp01_2023-06-26-19-21-33"
-out_path = "/home/agent/Code/ackermann_car_nav/data/tmp"
+file_path = "/home/dingrong/Code/ackermann_car_nav/data/20231114/test1_2023-11-13-10-58-18"
+out_path = "/home/dingrong/Code/ackermann_car_nav/data/tmp"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
 os.makedirs(f"{out_path}/gifs", exist_ok=True)
 robot_range = [-2.1, 0, -3, 0]  # 切割小车
+n_person = 1
 gt_range = [-8, 0, -0.3, 1.5]  # 切割人的点云
 gt_range1 = [-8, 0, -0.3, 0.7]  # 切割人的点云
 gt_range2 = [-8, 0, 0.8, 1.5]  # 切割人的点云
@@ -24,8 +25,8 @@ def init_fig():
     ax.clear()
     ax.set_xlabel('x(m)')
     ax.set_ylabel('y(m)')
-    ax.set_xlim([-7, 3])
-    ax.set_ylim([-3, 2])
+    ax.set_xlim([-5, 5])
+    ax.set_ylim([-5, 5])
     ax.tick_params(direction='in')
 
 
@@ -43,10 +44,13 @@ def gen_data():
             laser_pc_robot = pc_filter(point_cloud, *robot_range)
 
             # 标定激光雷达点云只保留人
-            laser_pc_person1 = pc_filter(point_cloud, *gt_range1)
-            laser_pc_person2 = pc_filter(point_cloud, *gt_range2)
-
-            yield point_cloud, laser_pc_robot, laser_pc_person1, laser_pc_person2, msg.header.seq
+            if n_person == 1:
+                laser_pc_person = pc_filter(point_cloud, *gt_range)
+                yield point_cloud, laser_pc_robot, laser_pc_person, msg.header.seq
+            else:
+                laser_pc_person1 = pc_filter(point_cloud, *gt_range1)
+                laser_pc_person2 = pc_filter(point_cloud, *gt_range2)
+                yield point_cloud, laser_pc_robot, laser_pc_person1, laser_pc_person2, msg.header.seq
 
 
 def visualize(result):
