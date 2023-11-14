@@ -15,7 +15,9 @@ from radar_fft_music_RA import *
 from corner_type import L_open_corner, L_open_corner_gt
 from nlos_sensing import pc_filter, isin_triangle, line_symmetry_point, transform, transform_inverse, registration, bounding_box2
 from postprocess import postprocess, nms_single_class
-from ..model.model import Darknet
+import sys
+sys.path.append('/home/agent/Code/ackermann_car_nav/src/mmwave_radar/script/model')
+from model import Darknet
 from bev import BEV
 
 
@@ -114,8 +116,8 @@ if __name__ == '__main__':
     radar_sub = message_filters.Subscriber('mmwave_radar_raw_data', adcData)
     vel_sub = message_filters.Subscriber('cmd_vel', Twist)
 
-    model_path = "/home/dingrong/Downloads/model-99.pth"
-    device = "cpu"
+    model_path = "/home/agent/Code/yolov3_my/output/20231031_144012/model/model-99.pth"
+    device = "cuda:0"
     anchors = torch.tensor([[10, 13], [16, 30], [33, 23]])
     img_size = [160, 320]
     conf_thres, nms_thres = 0.5, 0.4
@@ -140,12 +142,12 @@ if __name__ == '__main__':
             # ...
     out_path = "/home/agent/Code/ackermann_car_nav/data/trajectories"
     mode = "policy_my"
-    file_path = ""
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20231114/test1_2023-11-13-10-58-18.bag"
     file_name = file_path.split('/')[-1].split('.')[0][:-20]
     save_dir = os.path.join(out_path, mode, file_name)
     os.makedirs(save_dir, exist_ok=True)
     cnt = 0
-
+    # TODO: 你TM不开玩笑呢么？速度命令没有时间戳？我怎么知道什么时候执行的？
     ts = message_filters.ApproximateTimeSynchronizer([gt_lidar_sub, onboard_lidar_sub, radar_sub, vel_sub], 10, 0.05)
     ts.registerCallback(perception)
     rospy.spin()

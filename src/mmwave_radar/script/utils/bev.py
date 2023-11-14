@@ -71,7 +71,7 @@ class BEV():
             self.map_bbox(cluster_points, color=color)
 
     def map_car(self, color=red):
-        cl, cw = self.car_size[0], self.size[1]
+        cl, cw = self.car_size[0], self.car_size[1]
         nl = int(cl // self.d)
         nw = int(cw // self.d)
         for i in range(self.cx - nl // 2, self.cx + nl // 2):

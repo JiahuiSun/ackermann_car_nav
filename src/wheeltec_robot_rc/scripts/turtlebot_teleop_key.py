@@ -29,7 +29,7 @@
 
 import rospy
 
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, TwistStamped
 
 import sys, select, termios, tty
 
@@ -97,7 +97,9 @@ if __name__=="__main__":
     settings = termios.tcgetattr(sys.stdin) #获取键值初始化，读取终端相关属性
     
     rospy.init_node('turtlebot_teleop') #创建ROS节点
-    pub = rospy.Publisher('~cmd_vel', Twist, queue_size=5) #创建速度话题发布者，'~cmd_vel'='节点名/cmd_vel'
+    pub = rospy.Publisher('cmd_vel', Twist, queue_size=5) #创建速度话题发布者，'~cmd_vel'='节点名/cmd_vel'
+    pub2 = rospy.Publisher('cmd_vel2', TwistStamped, queue_size=5)
+    seq_cnt = 0
 
     x      = 0   #前进后退方向
     th     = 0   #转向/横向移动方向
@@ -186,16 +188,36 @@ if __name__=="__main__":
                 control_HorizonMove = target_HorizonMove
          
             twist = Twist() #创建ROS速度话题变量
+            twist_stamp = TwistStamped()
             #根据是否全向移动模式，给速度话题变量赋值
             if Omni==0:
-                twist.linear.x  = control_speed; twist.linear.y = 0;  twist.linear.z = 0
-                twist.angular.x = 0;             twist.angular.y = 0; twist.angular.z = control_turn
+                twist.linear.x  = control_speed
+                twist.linear.y = 0
+                twist.linear.z = 0
+                twist.angular.x = 0
+                twist.angular.y = 0
+                twist.angular.z = control_turn
+
+                twist_stamp.header.frame_id = 'base_link'
+                twist_stamp.header.stamp = rospy.Time.now()
+                twist_stamp.header.seq = seq_cnt
+                seq_cnt += 1
+                twist_stamp.twist.linear.x = control_speed
+                twist_stamp.twist.linear.y = 0
+                twist_stamp.twist.linear.z = 0
+                twist_stamp.twist.angular.x = 0
+                twist_stamp.twist.angular.y = 0
+                twist_stamp.twist.angular.z = control_turn
             else:
-                twist.linear.x  = control_speed; twist.linear.y = control_HorizonMove; twist.linear.z = 0
-                twist.angular.x = 0;             twist.angular.y = 0;                  twist.angular.z = 0
+                twist.linear.x  = control_speed
+                twist.linear.y = control_HorizonMove
+                twist.linear.z = 0
+                twist.angular.x = 0
+                twist.angular.y = 0
+                twist.angular.z = 0
 
             pub.publish(twist) #ROS发布速度话题
-
+            pub2.publish(twist_stamp)
     #运行出现问题则程序终止并打印相关错误信息
     except Exception as e:
         print(e)
@@ -203,10 +225,27 @@ if __name__=="__main__":
     #程序结束前发布速度为0的速度话题
     finally:
         twist = Twist()
-        twist.linear.x = 0;  twist.linear.y = 0;  twist.linear.z = 0
-        twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = 0
-        pub.publish(twist)
+        twist.linear.x = 0
+        twist.linear.y = 0
+        twist.linear.z = 0
+        twist.angular.x = 0
+        twist.angular.y = 0
+        twist.angular.z = 0
 
+        twist_stamp = TwistStamped()
+        twist_stamp.header.frame_id = 'base_link'
+        twist_stamp.header.stamp = rospy.Time.now()
+        twist_stamp.header.seq = seq_cnt
+        seq_cnt += 1
+        twist_stamp.twist.linear.x = 0
+        twist_stamp.twist.linear.y = 0
+        twist_stamp.twist.linear.z = 0
+        twist_stamp.twist.angular.x = 0
+        twist_stamp.twist.angular.y = 0
+        twist_stamp.twist.angular.z = 0
+
+        pub.publish(twist)
+        pub2.publish(twist_stamp)
     #程序结束前设置终端相关属性
     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
 

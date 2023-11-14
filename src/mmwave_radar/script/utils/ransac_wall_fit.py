@@ -7,7 +7,7 @@ from sklearn.cluster import DBSCAN
 import sys
 import os
 
-from nlos_sensing import transform, fit_line_ransac, pc_filter
+from nlos_sensing import transform, pc_filter
 from corner_type import fit_lines
 
 
@@ -16,7 +16,7 @@ if len(sys.argv) > 1:
     out_path = sys.argv[2]
     mode = sys.argv[3]
 else:
-    file_path = "/home/agent/Code/ackermann_car_nav/data/20231002/soft-3-A_2023-10-01-20-21-03.bag"
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20231114/test1_2023-11-13-10-58-18.bag"
     out_path = "/home/agent/Code/ackermann_car_nav/data/tmp"
     mode = "train"
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
@@ -27,8 +27,9 @@ save_gif = True
 cluster1 = DBSCAN(eps=0.1, min_samples=5)
 min_points_inline = 20
 min_length_inline = 0.6
-local_sensing_range = [-1, 5, -3, 3]  # 切割小车周围点云
-gt_sensing_range = [-4, 2, -4, 3]  # 切割gt周围点云
+
+onboard_wall_pc = [-1, 5, -1, 3]  # 切割小车周围点云
+gt_wall_pc = [-4, 2, -3, 3]  # 切割gt周围点云
 
 fig, ax = plt.subplots(figsize=(8, 8))
 color_panel = ['ro', 'go', 'bo', 'co', 'yo', 'wo', 'mo', 'ko']
@@ -44,7 +45,8 @@ def init_fig():
 
 def gen_data():
     for topic, msg, t in rosbag.Bag(file_path, 'r'):
-        if topic == '/laser_point_cloud2':
+        # if topic == '/laser_point_cloud2':
+        if topic == '/laser_point_cloud':
             points = point_cloud2.read_points_list(
                 msg, field_names=['x', 'y']
             )
@@ -52,27 +54,11 @@ def gen_data():
             y_pos = [p.y for p in points]
             point_cloud = np.array([x_pos, y_pos]).T
             # 从激光雷达坐标系到小车坐标系
-            # point_cloud = transform(point_cloud, 0.08, 0, 180)
+            point_cloud = transform(point_cloud, 0.08, 0, 180)
+            point_cloud = pc_filter(point_cloud, *onboard_wall_pc)
             # 过滤，去掉以距离小车中心3米以外的点
-            point_cloud = pc_filter(point_cloud, *gt_sensing_range)
+            # point_cloud = pc_filter(point_cloud, *gt_wall_pc)
             yield point_cloud, msg.header.seq
-
-def visualize_cluster(result):
-    init_fig()
-    all_point_cloud, seq = result
-    # 聚类，对每一类进行ransac拟合直线
-    db = cluster1.fit(all_point_cloud)
-    labels = db.labels_
-    unique_labels = sorted(set(labels[labels >= 0]))
-    for label in unique_labels:
-        print(label, unique_labels)
-        point_cloud = all_point_cloud[label == labels]
-        if len(point_cloud) < 10 or label > 7:
-            continue
-        coef, inlier_mask = fit_line_ransac(point_cloud)
-        inlier_points = point_cloud[inlier_mask]
-        ax.plot(inlier_points[:, 0], inlier_points[:, 1], color_panel[label], ms=2)
-    ax.set_title(f"frame id: {seq}")
 
 def visualize(result):
     init_fig()
@@ -88,6 +74,6 @@ ani = animation.FuncAnimation(
     init_func=init_fig, repeat=False, save_count=1000
 )
 if save_gif:
-    ani.save(f"{out_path}/gifs/{file_name}-gt2.gif", writer='pillow')
+    ani.save(f"{out_path}/gifs/{file_name}-onboard.gif", writer='pillow')
 else:
     plt.show()
