@@ -408,17 +408,61 @@ def registration(src, tar):
     S = src.dot(tar.T)
     U, Sigma, Vh = np.linalg.svd(S)
     R = U.dot(Vh).T
+    if np.linalg.det(R) < 0:
+        Vh[-1, :] *= -1
+        R = U.dot(Vh).T
     T = tar_avg - R.dot(src_avg)
     return R, T
 
 
+def nearest_nbr(src, tar):
+    indices = np.zeros(src.shape[0], dtype=np.int32)
+    distances = np.zeros(src.shape[0])
+    for i, s in enumerate(src):
+        min_dist = np.inf
+        for j, t in enumerate(tar):
+            dist = np.linalg.norm(s-t)
+            if dist < min_dist:
+                min_dist = dist
+                indices[i] = j
+                distances[i] = dist
+    return distances, indices
+
+
+def ICP(src, tar, max_iter=50, tolerance=0.001):
+    """点云精配准
+    从一个粗配准后的两片点云开始，迭代地进行以下操作：
+        1. 找两两距离最近的点对
+        2. 利用这些点对，计算变换矩阵
+    Args:
+        source: (2, N)
+        target: (2, N)
+    Returns:
+        R: (2, 2)
+        T: (2, 1)
+    """
+    src_bk = np.copy(src)
+    prev_err = 0
+    for i in range(max_iter):
+        distances, indices = nearest_nbr(src.T, tar.T)
+        R, T = registration(src, tar[:, indices])
+        src = R.dot(src) + T
+        mean_err = np.mean(distances)
+        if abs(prev_err - mean_err) < tolerance:
+            break
+        prev_err = mean_err
+    R, T = registration(src_bk, src)
+    return R, T
+
+
 if __name__ == '__main__':
-    src = np.random.randn(2, 2)
-    theta = 68 * np.pi / 180
+    src = np.random.randn(2, 20)
+    theta = 1 * np.pi / 180
     Rt = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     dt = np.array([[1.], [1.]])
     tar = Rt.dot(src) + dt
     R, T = registration(src, tar)
+    # R, T = ICP(src, tar, max_iter=3000, tolerance=0.00001)
     print(Rt)
     print(R)
     print(dt)

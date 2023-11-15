@@ -16,9 +16,9 @@ def fit_lines(laser_pc, n_line=2):
     """
     min_points_inline = 20
     min_length_inline = 0.6
-    ransac_sigma = 0.02
+    ransac_sigma = 0.03
     ransac_iter = 200
-    cluster = DBSCAN(eps=1, min_samples=20)
+    cluster = DBSCAN(eps=1.5, min_samples=20)
     # 提取墙面
     fitted_lines = []
     for i in range(n_line):

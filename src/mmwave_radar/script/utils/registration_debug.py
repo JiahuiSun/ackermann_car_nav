@@ -14,10 +14,11 @@ from corner_type import L_open_corner_gt, L_open_corner_onboard
 ## 读取数据
 if len(sys.argv) > 1:
     file_path = sys.argv[1]
-    out_path = sys.argv[2]
+    single = int(sys.argv[2])
 else:
     file_path = "/home/agent/Code/ackermann_car_nav/data/20231115/bc_static2_2023-11-14-15-30-01"
     out_path = "/home/agent/Code/ackermann_car_nav/data/tmp"
+    single = 1
 file_name = file_path.split('/')[-1].split('.')[0][:-20]
 os.makedirs(f"{out_path}/gifs", exist_ok=True)
 bag = rosbag.Bag(f"{file_path}.bag")
@@ -132,18 +133,51 @@ def init_fig():
     ax.set_ylim([-5, 5])
     ax.tick_params(direction='in')
 
+from sklearn.cluster import DBSCAN, KMeans
+db = KMeans(n_clusters=2, n_init='auto')
+# db = DBSCAN(eps=0.5, min_samples=10)
+
 def gen_data():
     for i in range(len(gt_laser_list)):
         # 从GT激光雷达点云中提取墙面
         gt_laser_pc = pc_filter(gt_laser_list[i][2], *gt_wall_pc_range)
         gt_walls, gt_points = L_open_corner_gt(gt_laser_pc)
-        src = gt_points['reference_points'].T
         # 从onboard激光雷达点云中提取墙面
         onboard_laser_pc = pc_filter(robot_laser_list[i][2], *onboard_wall_pc_range)
         onboard_walls, onboard_points = L_open_corner_onboard(onboard_laser_pc)
-        tar = onboard_points['reference_points'].T
+
+        # 按照x值大小排序，取最小的top20
+        indices = np.argsort(-gt_walls['barrier_wall_pc'][:, 1])
+        gt_barrier_wall_set = gt_walls['barrier_wall_pc'][indices][:20]
+        ax.plot(gt_barrier_wall_set[:, 0], gt_barrier_wall_set[:, 1], color_panel[0], ms=2)
+
+        gt_labels = db.fit(gt_walls['far_wall_pc']).labels_
+        part1 = gt_walls['far_wall_pc'][gt_labels==0]
+        part2 = gt_walls['far_wall_pc'][gt_labels==1]
+        gt_part1, gt_part2 = (part1, part2) if np.mean(part1[:, 0]) < np.mean(part2[:, 0]) else (part2, part1)
+        ax.plot(gt_part1[:, 0], gt_part2[:, 1], color_panel[1], ms=2)
+        ax.plot(gt_part2[:, 0], gt_part2[:, 1], color_panel[2], ms=2)
+
+        # 按照x值大小排序，取最小的top20
+        indices = np.argsort(onboard_walls['barrier_wall_pc'][:, 0])
+        onboard_barrier_wall_set = onboard_walls['barrier_wall_pc'][indices][:20]
+        ax.plot(onboard_barrier_wall_set[:, 0], onboard_barrier_wall_set[:, 1], color_panel[3], ms=2)
+
+        onboard_labels = db.fit(onboard_walls['far_wall_pc']).labels_
+        part1 = onboard_walls['far_wall_pc'][onboard_labels==0]
+        part2 = onboard_walls['far_wall_pc'][onboard_labels==1]
+        onboard_part1, onboard_part2 = (part1, part2) if np.mean(part1[:, 1]) < np.mean(part2[:, 1]) else (part2, part1)
+        ax.plot(onboard_part1[:, 0], onboard_part1[:, 1], color_panel[4], ms=2)
+        ax.plot(onboard_part2[:, 0], onboard_part2[:, 1], color_panel[5], ms=2)
+
+        # 把两个part2对齐
+        min_len = min(len(gt_part2), len(onboard_part2))
+        indices = np.argsort(gt_part2[:, 0])
+        gt_part2 = gt_part2[indices][:min_len]
+        indices = np.argsort(onboard_part2[:, 1])
+        onboard_part2 = onboard_part2[indices][:min_len]
         # 从GT激光雷达到小车激光雷达
-        R, T = registration(src, tar)
+        R, T = registration(gt_part2.T, onboard_part2.T)
 
         src2tar_far_wall_pc = (R.dot(gt_walls['far_wall_pc'].T) + T).T
         src2tar_barrier_wall_pc = (R.dot(gt_walls['barrier_wall_pc'].T) + T).T
@@ -172,6 +206,6 @@ ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
     init_func=init_fig, repeat=False, save_count=1000
 )
-ani.save(f"{out_path}/gifs/{file_name}-regis.gif", writer='pillow')
+ani.save(f"{out_path}/gifs/{file_name}-regis4.gif", writer='pillow')
 
 fwrite.close()
