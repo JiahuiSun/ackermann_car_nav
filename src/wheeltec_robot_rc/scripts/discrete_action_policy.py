@@ -162,7 +162,6 @@ if __name__=="__main__":
             twist_stamp = TwistStamped()
             twist_stamp.header.frame_id = 'base_link'
             twist_stamp.header.stamp = rospy.Time.now()
-            twist_stamp.header.seq = key2action[(x,th)]
             twist_stamp.twist.linear.x = control_speed
             twist_stamp.twist.linear.y = 0
             twist_stamp.twist.linear.z = 0
@@ -189,7 +188,6 @@ if __name__=="__main__":
         twist_stamp = TwistStamped()
         twist_stamp.header.frame_id = 'base_link'
         twist_stamp.header.stamp = rospy.Time.now()
-        twist_stamp.header.seq = key2action[(x,th)]
         twist_stamp.twist.linear.x = 0
         twist_stamp.twist.linear.y = 0
         twist_stamp.twist.linear.z = 0
