@@ -111,10 +111,12 @@ if __name__=="__main__":
     count  = 0   #键值不再范围计数
     control_speed = 0 #前进后退实际控制速度
     control_turn  = 0 #转向实际控制速度
+    cmd_hz = 5
     try:
         print(msg) #打印控制说明
         print(vels(speed,turn)) #打印当前速度
-        while(1):
+        rate = rospy.Rate(cmd_hz)
+        while not rospy.is_shutdown():
             key = getKey() #获取键值
 
             #判断键值是否在移动/转向方向键值内
@@ -171,6 +173,7 @@ if __name__=="__main__":
 
             pub.publish(twist) #ROS发布速度话题
             pub2.publish(twist_stamp)
+            rate.sleep()
     #运行出现问题则程序终止并打印相关错误信息
     except Exception as e:
         print(e)
