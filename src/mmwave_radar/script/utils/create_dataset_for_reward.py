@@ -22,6 +22,8 @@ from bev import BEV
 
 
 def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
+    global traj_start_flag, cnt
+
     st1 = time.time()
     # 把毫米波雷达原始数据变成热力图和点云
     adc_pack = struct.pack(f">{frame_bytes}b", *radar_adc_data.data)
@@ -67,18 +69,22 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     # 提取action
     action = cmd_vel2action(cmd_vel.twist)
 
-    # 提取bbox GT
+    # 如果小车一开始就有速度，那么就开始trajectory；如果小车一开始没有速度，那么就等到小车有速度了再开始
+    if traj_start_flag:
+        if action < 1:
+            return
+        else:
+            traj_start_flag = False
+    # 如果人开始出现在小车视距内，trajectory停止
     key_points, box_hw = bounding_box2(person_pc_2radar, delta_x=0.1, delta_y=0.1)
-    # 只有当人位于NLOS右边才保存label和预测结果
-    # FIXME: 这里有问题啊，NLOS区域是在雷达坐标系下构建的，随着移动的不同会变化，但不在NLOS区域内并不是小车不该检测到人的理由
-    # 这就说明了，你模型还是没有想清楚
-    inter1, inter3, gt_center = onboard_points['inter1'], onboard_points['inter3'], key_points[0]
-    if np.cross(inter3-inter1, gt_center-inter1) <= 0:
+    gt_center = key_points[0]
+    inter1, barrier_corner = onboard_points['inter1'], onboard_points['barrier_corner']
+    if np.cross(barrier_corner-inter1, gt_center-inter1) > 0:
         return
-    # 如果label在NLOS内，映射过去
-    if isin_triangle(onboard_points['barrier_corner'], inter1, inter3, gt_center):
-        person_pc_2radar = line_symmetry_point(onboard_walls['far_wall'], person_pc_2radar)
-        key_points, box_hw = bounding_box2(person_pc_2radar, delta_x=0.1, delta_y=0.1)
+
+    # 小车每个时刻，都要有一个NLOS的感知结果；所以需要NLOS真实的label
+    person_pc_2radar = line_symmetry_point(onboard_walls['far_wall'], person_pc_2radar)
+    key_points, box_hw = bounding_box2(person_pc_2radar, delta_x=0.1, delta_y=0.1)
     key_points[0, 0] = np.clip(key_points[0, 0], -(H-1)*range_res, (H-1)*range_res)
     key_points[0, 1] = np.clip(key_points[0, 1], 0, (H-1)*range_res)
     label = np.array([
@@ -95,12 +101,22 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
         pred = model(img)
     pred_bbox = postprocess(pred, anchors, img_size)
     detections = nms_single_class(pred_bbox.cpu().numpy(), conf_thres, nms_thres)[0]
+    # NLOS过滤逻辑
+    final_det = []
+    for det in detections:
+        xyxy, conf = det[:4], det[4]
+        pred_center = [(xyxy[0]+xyxy[2])/2, (xyxy[1]+xyxy[3])/2]
+        pred_center = np.array([
+            (pred_center[0]-H)*range_res, pred_center[1]*range_res
+        ])
+        if isin_triangle(onboard_points['symmetric_barrier_corner'], onboard_points['inter2'], \
+                         onboard_points['inter1'], pred_center):
+            final_det.append(xyxy)
 
     st5 = time.time()
     # 把整条轨迹的s、a、pred、label保存下来
-    global cnt
     with open(os.path.join(save_dir, f"sample{cnt}.pkl"), 'wb') as f:
-        pickle.dump([state, action, detections, label], f)
+        pickle.dump([state, action, final_det, label], f)
     cnt += 1
     end = time.time()
     print(f"total:{end-st1:.2f} RA:{st2-st1:.2f} onboard_lidar_proc:{st3-st2:.2f} gt_lidar_proc:{st4-st3:.2f} object detect:{st5-st4:.2f} save:{end-st5:.2f}")
@@ -165,6 +181,7 @@ if __name__ == '__main__':
     save_dir = os.path.join(out_path, mode, file_name)
     os.makedirs(save_dir, exist_ok=True)
     cnt = 0
+    traj_start_flag = True
     ts = message_filters.ApproximateTimeSynchronizer([gt_lidar_sub, onboard_lidar_sub, radar_sub, vel_sub], 10, 0.05)
     ts.registerCallback(perception)
     rospy.spin()
