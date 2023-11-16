@@ -1,5 +1,7 @@
 import numpy as np
 from PIL import Image
+from sklearn.cluster import DBSCAN
+
 from corner_type import fit_lines
 from nlos_sensing import pc_filter
 
@@ -28,6 +30,7 @@ class BEV():
         self.n_wall = 2
         self.car_size = [0.39, 0.24]
 
+        self.cluster = DBSCAN(eps=0.1, min_samples=5)
         self.init()
 
     def init(self):
