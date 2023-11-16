@@ -87,7 +87,7 @@ def getKey():
 
 
 speed = 0.2 #默认移动速度 m/s
-turn  = 0.5   #默认转向速度 rad/s
+turn  = 0.25   #默认转向速度 rad/s
 #以字符串格式返回当前速度
 def vels(speed,turn):
     return "currently:\tspeed %s\tturn %s " % (speed,turn)

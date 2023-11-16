@@ -14,16 +14,15 @@ from corner_type import L_open_corner_gt, L_open_corner_onboard
 ## 读取数据
 if len(sys.argv) > 1:
     file_path = sys.argv[1]
-    out_path = sys.argv[2]
 else:
-    file_path = "/home/agent/Code/ackermann_car_nav/data/20231115/bc_static2_2023-11-14-15-30-01"
-    out_path = "/home/agent/Code/ackermann_car_nav/data/tmp"
-file_name = file_path.split('/')[-1].split('.')[0][:-20]
-os.makedirs(f"{out_path}/gifs", exist_ok=True)
-bag = rosbag.Bag(f"{file_path}.bag")
-bag_data = bag.read_messages(topics=['/laser_point_cloud', '/laser_point_cloud2', '/mmwave_radar_point_cloud', '/mmwave_radar_raw_data'])
+    file_path = "/home/agent/Code/ackermann_car_nav/data/20231116/two6_2023-11-15-21-43-47.bag"
+output_dir = os.path.join(os.path.dirname(file_path), 'gifs')
+os.makedirs(output_dir, exist_ok=True)
+file_name = os.path.basename(file_path).split('.')[0]
+bag = rosbag.Bag(file_path)
+bag_data = bag.read_messages(topics=['/laser_point_cloud', '/laser_point_cloud2', '/mmwave_radar_raw_data'])
 frame_bytes = 196608
-fwrite = open(f"{file_path}.log", 'w')
+fwrite = open(os.path.join(output_dir, f"{file_name}.log"), 'w')
 
 # 我原来想获取同一个时刻下的所有topic，才发现原来各个传感器时间是不一样的，没有任何消息是同时出现的，所以一定有先后时间顺序
 robot_laser_list, gt_laser_list, mmwave_raw_list = [], [], []
@@ -63,7 +62,7 @@ ax.plot(laser_t, np.ones(len(laser_t))*1.2, 'og', ms=0.5)
 ax.plot(laser_stamp, np.ones(len(laser_stamp))*1.8, 'og', ms=0.5)
 ax.plot(laser2_t, np.ones(len(laser2_t))*1.3, 'ok', ms=0.5)
 ax.plot(laser2_stamp, np.ones(len(laser2_stamp))*1.7, 'ok', ms=0.5)
-fig.savefig(f"{file_path}-orignal-stamp.png", dpi=100)
+fig.savefig(os.path.join(output_dir, f"{file_name}-orignal-stamp.png"), dpi=100)
 
 
 ## 时间对齐
@@ -101,6 +100,7 @@ while True:
             data_list[i], data_list[shortest_list], _, _ = align(data_list[i], data_list[shortest_list], k=1, j=1)
 mmwave_raw_list, robot_laser_list, gt_laser_list = data_list
 fwrite.write(f"mmwave_raw_len: {len(mmwave_raw_list)}, robot_laser_len: {len(robot_laser_list)}, gt_laser_len: {len(gt_laser_list)}\n")
+fwrite.close()
 
 mmwave_raw_t = np.array([t for t, stamp, raw in mmwave_raw_list])
 mmwave_raw_stamp = np.array([stamp for t, stamp, raw in mmwave_raw_list])
@@ -115,7 +115,7 @@ ax.plot(laser_t, np.ones(len(laser_t))*1.2, 'og', ms=0.5)
 ax.plot(laser_stamp, np.ones(len(laser_stamp))*1.8, 'og', ms=0.5)
 ax.plot(laser2_t, np.ones(len(laser2_t))*1.3, 'ok', ms=0.5)
 ax.plot(laser2_stamp, np.ones(len(laser2_stamp))*1.7, 'ok', ms=0.5)
-fig.savefig(f"{file_path}-temporal-align.png", dpi=100)
+fig.savefig(os.path.join(output_dir, f"{file_name}-temporal-align.png"), dpi=100)
 
 
 ## 空间对齐
@@ -172,6 +172,4 @@ ani = animation.FuncAnimation(
     fig, visualize, gen_data, interval=100,
     init_func=init_fig, repeat=False, save_count=1000
 )
-ani.save(f"{out_path}/gifs/{file_name}-regis.gif", writer='pillow')
-
-fwrite.close()
+ani.save(os.path.join(output_dir, f"{file_name}-regis.gif"), writer='pillow')
