@@ -19,8 +19,8 @@ class BEV():
         self.width = width  # 宽度8m
         self.n = n  # 宽分桶数量 256
         self.d = width / n  # 分桶边长
-        self.nx = int(height // self.d)  # x这条边分成多少份
-        self.ny = n  # y这条边分成多少份
+        self.nx = int(height / self.d)  # x这条边分成多少份 192
+        self.ny = n  # y这条边分成多少份 256
         self.ratio_l = ratio_l  # 中心位置在l的1/6处
         self.ratio_w = ratio_w  # 中心位置在w的1/2
         self.cx = self.nx // self.ratio_l  # 中心格子

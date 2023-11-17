@@ -10,13 +10,13 @@ import torch
 import struct
 import time
 import os
+import sys
+sys.path.append('/home/agent/Code/ackermann_car_nav/src/mmwave_radar/script/model')
 
 from radar_fft_music_RA import *
 from corner_type import L_open_corner, L_open_corner_gt
 from nlos_sensing import pc_filter, isin_triangle, line_symmetry_point, transform, transform_inverse, registration, bounding_box2
-from postprocess import postprocess, nms_single_class
-import sys
-sys.path.append('/home/agent/Code/ackermann_car_nav/src/mmwave_radar/script/model')
+from postprocess import postprocess, nms_single_class, xywh2xyxy
 from model import Darknet
 from bev import BEV
 
@@ -90,6 +90,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     label = np.array([
         [key_points[0, 0]+H*range_res, key_points[0, 1], box_hw[1], box_hw[0]]
     ])
+    label = xywh2xyxy(label)
 
     st4 = time.time()
     # 目标检测
@@ -111,7 +112,8 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
         ])
         if isin_triangle(onboard_points['symmetric_barrier_corner'], onboard_points['inter2'], \
                          onboard_points['inter1'], pred_center):
-            final_det.append(xyxy)
+            final_det.append(det)
+    final_det = np.array(final_det)
 
     st5 = time.time()
     # 把整条轨迹的s、a、pred、label保存下来
@@ -160,6 +162,13 @@ if __name__ == '__main__':
     model = Darknet().to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
+    # warmup
+    img = np.load('/home/agent/Code/ackermann_car_nav/data/rss_mask/images/train/exp1_0.npy')[..., 0:1]
+    img = img.transpose(2, 0, 1)
+    img = torch.from_numpy(img).float().to(device)
+    img = img[None]
+    with torch.no_grad():
+        pred = model(img)
 
     onboard_wall_pc_range = [-1, 5, -3, 3]  # 切割小车周围墙面点云
     gt_wall_pc_range = [-4, 2, -3, 3]  # 切割gt周围墙面点云
@@ -176,7 +185,10 @@ if __name__ == '__main__':
             # ...
     out_path = "/home/agent/Code/ackermann_car_nav/data/trajectories"
     mode = "policy_my"
-    file_path = "/home/agent/Code/ackermann_car_nav/data/20231117/traj_loc1_2023-11-16-11-50-40.bag"
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+    else:
+        file_path = "/home/agent/Code/ackermann_car_nav/data/20231117/traj_loc2_2023-11-16-11-51-18.bag"
     file_name = file_path.split('/')[-1].split('.')[0]
     save_dir = os.path.join(out_path, mode, file_name)
     os.makedirs(save_dir, exist_ok=True)
