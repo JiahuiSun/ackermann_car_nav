@@ -37,20 +37,20 @@ class BEV():
         self.grid = np.zeros((3, self.nx, self.ny))
         self.map_car()
 
-    def image_visualization(self, fpath='test.png'):
+    def bev_visualization(self, fpath='test.png'):
         im = Image.new("RGB", (self.nx, self.ny))
         for i in range(self.nx):
             for j in range(self.ny):
-                im.putpixel((i, j), self.grid[:, i, j].astype(np.int8))
+                im.putpixel((i, j), tuple(self.grid[:, i, j].astype(np.int8).tolist()))
         im.save(fpath)
 
     def map_bbox(self, points, delta_x=0.0, delta_y=0.0, color=blue):
         x_min, x_max = points[:, 0].min()-delta_x, points[:, 0].max()+delta_x
         y_min, y_max = points[:, 1].min()-delta_y, points[:, 1].max()+delta_y
-        i_low = int((x_min - self.x_min) // self.d)
-        i_high = int((x_max - self.x_min) // self.d)
-        j_low = int((y_min - self.y_min) // self.d)
-        j_high = int((y_max - self.y_min) // self.d)
+        i_low = int((x_min - self.x_min) / self.d)
+        i_high = int((x_max - self.x_min) / self.d)
+        j_low = int((y_min - self.y_min) / self.d)
+        j_high = int((y_max - self.y_min) / self.d)
         for i in range(i_low, i_high):
             for j in range(j_low, j_high):
                 if 0 <= i < self.nx and 0 <= j < self.ny:
@@ -58,8 +58,8 @@ class BEV():
 
     def map_points(self, points, color=pink):
         for point in points:
-            i = int((point[0] - self.x_min) // self.d)
-            j = int((point[1] - self.y_min) // self.d)
+            i = int((point[0] - self.x_min) / self.d)
+            j = int((point[1] - self.y_min) / self.d)
             if 0 <= i < self.nx and 0 <= j < self.ny:
                 self.grid[:, i, j] = color
 
@@ -75,8 +75,8 @@ class BEV():
 
     def map_car(self, color=red):
         cl, cw = self.car_size[0], self.car_size[1]
-        nl = int(cl // self.d)
-        nw = int(cw // self.d)
+        nl = int(cl / self.d)
+        nw = int(cw / self.d)
         for i in range(self.cx - nl // 2, self.cx + nl // 2):
             for j in range(self.cy - nw // 2, self.cy + nw // 2):
                 self.grid[:, i, j] = color

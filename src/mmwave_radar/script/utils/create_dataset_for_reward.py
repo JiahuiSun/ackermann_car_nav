@@ -64,6 +64,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     person_pc = pc_filter(gt_laser_pc, *person_range)
     person_pc_2radar = (R.dot(person_pc.T) + T).T
     person_pc_2car = transform(person_pc_2radar, 0.17, 0, 360-90)
+    bev_map.init()
     state = bev_map.mapping(onboard_laser_pc_2car, person_pc_2car)
 
     # 提取action
@@ -80,7 +81,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     gt_center = key_points[0]
     inter1, barrier_corner = onboard_points['inter1'], onboard_points['barrier_corner']
     if np.cross(barrier_corner-inter1, gt_center-inter1) > 0:
-        return
+        sys.exit()
 
     # 小车每个时刻，都要有一个NLOS的感知结果；所以需要NLOS真实的label
     person_pc_2radar = line_symmetry_point(onboard_walls['far_wall'], person_pc_2radar)
@@ -119,6 +120,9 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     # 把整条轨迹的s、a、pred、label保存下来
     with open(os.path.join(save_dir, f"sample{cnt}.pkl"), 'wb') as f:
         pickle.dump([state, action, final_det, label], f)
+    bev_map.bev_visualization(os.path.join(save_dir, f"state{cnt}.png"))
+    # with open(os.path.join(save_dir, f"state{cnt}.npy"), 'wb') as f:
+    #     pickle.dump(state, f)
     cnt += 1
     end = time.time()
     print(f"total:{end-st1:.2f} RA:{st2-st1:.2f} onboard_lidar_proc:{st3-st2:.2f} gt_lidar_proc:{st4-st3:.2f} object detect:{st5-st4:.2f} save:{end-st5:.2f}")
@@ -176,21 +180,15 @@ if __name__ == '__main__':
 
     bev_map = BEV(height=6, width=8, n=256)
 
-    # policy_my
-        # traj_name
-            # (s1, a1, pred1, label1)
-            # ...
-        # traj_name
-            # (s1, a1, pred1, label1)
-            # ...
     out_path = "/home/agent/Code/ackermann_car_nav/data/trajectories"
-    mode = "policy_my"
     if len(sys.argv) > 1:
-        file_path = sys.argv[1]
+        env = sys.argv[1]
+        file_path = sys.argv[2]
     else:
+        env = "traj_loc"
         file_path = "/home/agent/Code/ackermann_car_nav/data/20231117/traj_loc2_2023-11-16-11-51-18.bag"
     file_name = file_path.split('/')[-1].split('.')[0]
-    save_dir = os.path.join(out_path, mode, file_name)
+    save_dir = os.path.join(out_path, env, file_name)
     os.makedirs(save_dir, exist_ok=True)
     cnt = 0
     traj_start_flag = True
