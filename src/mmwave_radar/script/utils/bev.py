@@ -41,7 +41,7 @@ class BEV():
         im = Image.new("RGB", (self.nx, self.ny))
         for i in range(self.nx):
             for j in range(self.ny):
-                im.putpixel((i, j), tuple(self.grid[:, i, j].astype(np.int8).tolist()))
+                im.putpixel((i, j), tuple(self.grid[:, i, j].astype('uint8').tolist()))
         im.save(fpath)
 
     def map_bbox(self, points, delta_x=0.0, delta_y=0.0, color=blue):
