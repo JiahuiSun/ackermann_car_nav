@@ -14,22 +14,19 @@ black = np.array([0, 0, 0])
 pink = np.array([255, 192, 203])
 
 class BEV():
-    def __init__(self, height, width, n, ratio_l=6, ratio_w=2):
+    def __init__(self, height=6, width=8, n=256, ratio_l=6, ratio_w=2, n_wall=2):
         self.height = height  # 长度6m
         self.width = width  # 宽度8m
         self.n = n  # 宽分桶数量 256
         self.d = width / n  # 分桶边长
         self.nx = int(height / self.d)  # x这条边分成多少份 192
         self.ny = n  # y这条边分成多少份 256
-        self.ratio_l = ratio_l  # 中心位置在l的1/6处
-        self.ratio_w = ratio_w  # 中心位置在w的1/2
-        self.cx = self.nx // self.ratio_l  # 中心格子
-        self.cy = self.ny // self.ratio_w  # 中心格子，即小车位置
-        self.x_min, self.x_max = -1, 5
-        self.y_min, self.y_max = -4, 4
-        self.n_wall = 2
+        self.cx = self.nx // ratio_l  # 中心格子 32
+        self.cy = self.ny // ratio_w  # 中心格子 128
+        self.x_min, self.x_max = -height/ratio_l, height-height/ratio_l
+        self.y_min, self.y_max = -width/ratio_w, width/ratio_w
+        self.n_wall = n_wall
         self.car_size = [0.39, 0.24]
-
         self.cluster = DBSCAN(eps=0.1, min_samples=5)
         self.init()
 
@@ -74,7 +71,7 @@ class BEV():
             self.map_bbox(cluster_points, color=color)
 
     def map_car(self, color=red):
-        cl, cw = self.car_size[0], self.car_size[1]
+        cl, cw = self.car_size
         nl = int(cl / self.d)
         nw = int(cw / self.d)
         for i in range(self.cx - nl // 2, self.cx + nl // 2):
@@ -83,6 +80,10 @@ class BEV():
 
     def mapping(self, onboard_laser_pc, *person_laser_pc_list):
         """
+        以小车左下角为原点建图:
+            - map_car: 计算小车中心所在像素坐标，上下左右寻找像素的边界
+            - map_points: 计算每个点所在的像素坐标，如果在观测范围内就填充
+            - map_bbox: 先把点云框起来，再计算锚点所在的像素坐标，填充bbox范围
         Args:
             onboard_laser_pc: (N, 2)
             person_laser_pc_list: [(N, 2), ]
@@ -93,7 +94,7 @@ class BEV():
         fitted_lines, remaining_pc = fit_lines(onboard_laser_pc, self.n_wall)
         for coef, wall_pc in fitted_lines:
             self.map_points(wall_pc, color=pink)
-        self.map_obstacle(remaining_pc, color=blue)
+        self.map_points(remaining_pc, color=blue)
         for person_pc in person_laser_pc_list:
             self.map_bbox(person_pc, delta_x=0.1, delta_y=0.1, color=green)
         return self.grid

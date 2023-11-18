@@ -47,7 +47,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     onboard_walls, onboard_points = L_open_corner(onboard_laser_pc_2radar)
 
     st3 = time.time()
-    # GT激光雷达提取墙面和关键点
+    # GT激光雷达提取墙面、人，空间对齐
     points = point_cloud2.read_points_list(
         gt_laser_pc_msg, field_names=['x', 'y']
     )
@@ -56,31 +56,26 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     gt_laser_pc = np.array([x_pos, y_pos]).T
     gt_laser_pc_wall = pc_filter(gt_laser_pc, *gt_wall_pc_range)
     gt_walls, gt_points = L_open_corner_gt(gt_laser_pc_wall)
-    src = gt_points['reference_points'].T
-    tar = onboard_points['reference_points'].T
-    R, T = registration(src, tar)
-
-    # 提取state
+    R, T = registration(gt_points['reference_points'].T, onboard_points['reference_points'].T)
     person_pc = pc_filter(gt_laser_pc, *person_range)
     person_pc_2radar = (R.dot(person_pc.T) + T).T
     person_pc_2car = transform(person_pc_2radar, 0.17, 0, 360-90)
+
+    # 提取state
     bev_map.init()
     state = bev_map.mapping(onboard_laser_pc_2car, person_pc_2car)
 
     # 提取action
     action = cmd_vel2action(cmd_vel.twist)
 
-    # 如果小车一开始就有速度，那么就开始trajectory；如果小车一开始没有速度，那么就等到小车有速度了再开始
+    # 当小车开始有速度了，trajectory开始；当人出现在小车视距内，trajectory停止
     if traj_start_flag:
         if action < 1:
             return
         else:
             traj_start_flag = False
-    # 如果人开始出现在小车视距内，trajectory停止
     key_points, box_hw = bounding_box2(person_pc_2radar, delta_x=0.1, delta_y=0.1)
-    gt_center = key_points[0]
-    inter1, barrier_corner = onboard_points['inter1'], onboard_points['barrier_corner']
-    if np.cross(barrier_corner-inter1, gt_center-inter1) > 0:
+    if np.cross(onboard_points['barrier_corner']-onboard_points['inter1'], key_points[0]-onboard_points['inter1']) > 0:
         sys.exit()
 
     # 小车每个时刻，都要有一个NLOS的感知结果；所以需要NLOS真实的label
@@ -103,7 +98,7 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
         pred = model(img)
     pred_bbox = postprocess(pred, anchors, img_size)
     detections = nms_single_class(pred_bbox.cpu().numpy(), conf_thres, nms_thres)[0]
-    # NLOS过滤逻辑
+    # NLOS过滤
     final_det = []
     for det in detections:
         xyxy, conf = det[:4], det[4]
@@ -121,8 +116,6 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     with open(os.path.join(save_dir, f"sample{cnt}.pkl"), 'wb') as f:
         pickle.dump([state, action, final_det, label], f)
     bev_map.bev_visualization(os.path.join(save_dir, f"state{cnt}.png"))
-    # with open(os.path.join(save_dir, f"state{cnt}.npy"), 'wb') as f:
-    #     pickle.dump(state, f)
     cnt += 1
     end = time.time()
     print(f"total:{end-st1:.2f} RA:{st2-st1:.2f} onboard_lidar_proc:{st3-st2:.2f} gt_lidar_proc:{st4-st3:.2f} object detect:{st5-st4:.2f} save:{end-st5:.2f}")
@@ -174,7 +167,7 @@ if __name__ == '__main__':
     with torch.no_grad():
         pred = model(img)
 
-    onboard_wall_pc_range = [-1, 5, -3, 3]  # 切割小车周围墙面点云
+    onboard_wall_pc_range = [-1, 5, -4, 4]  # 切割小车周围墙面点云
     gt_wall_pc_range = [-4, 2, -3, 3]  # 切割gt周围墙面点云
     person_range = [-8, 0, -0.3, 1]  # 根据实际情况设定
 
