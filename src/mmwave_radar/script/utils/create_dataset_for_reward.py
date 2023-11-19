@@ -68,19 +68,10 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     # 提取action
     action = cmd_vel2action(cmd_vel.twist)
 
-    # 当小车开始有速度了，trajectory开始；当人出现在小车视距内，trajectory停止
-    if traj_start_flag:
-        if action < 1:
-            return
-        else:
-            traj_start_flag = False
     key_points, box_hw = bounding_box2(person_pc_2radar, delta_x=0.1, delta_y=0.1)
-    if np.cross(onboard_points['barrier_corner']-onboard_points['inter1'], key_points[0]-onboard_points['inter1']) > 0:
-        sys.exit()
-
-    # 小车每个时刻，都要有一个NLOS的感知结果；所以需要NLOS真实的label
-    person_pc_2radar = line_symmetry_point(onboard_walls['far_wall'], person_pc_2radar)
-    key_points, box_hw = bounding_box2(person_pc_2radar, delta_x=0.1, delta_y=0.1)
+    if isin_triangle(onboard_points['barrier_corner'], onboard_points['inter1'], onboard_points['inter3'], key_points[0]):
+        person_pc_2radar = line_symmetry_point(onboard_walls['far_wall'], person_pc_2radar)
+        key_points, box_hw = bounding_box2(person_pc_2radar, delta_x=0.1, delta_y=0.1)
     key_points[0, 0] = np.clip(key_points[0, 0], -(H-1)*range_res, (H-1)*range_res)
     key_points[0, 1] = np.clip(key_points[0, 1], 0, (H-1)*range_res)
     label = np.array([
@@ -115,7 +106,8 @@ def perception(gt_laser_pc_msg, onboard_laser_pc_msg, radar_adc_data, cmd_vel):
     # 把整条轨迹的s、a、pred、label保存下来
     with open(os.path.join(save_dir, f"sample{cnt}.pkl"), 'wb') as f:
         pickle.dump([state, action, final_det, label], f)
-    bev_map.bev_visualization(os.path.join(save_dir, f"state{cnt}.png"))
+    if save_state:
+        bev_map.bev_visualization(os.path.join(save_dir, f"state{cnt}.png"))
     cnt += 1
     end = time.time()
     print(f"total:{end-st1:.2f} RA:{st2-st1:.2f} onboard_lidar_proc:{st3-st2:.2f} gt_lidar_proc:{st4-st3:.2f} object detect:{st5-st4:.2f} save:{end-st5:.2f}")
@@ -151,7 +143,7 @@ if __name__ == '__main__':
     vel_sub = message_filters.Subscriber('cmd_vel2', TwistStamped)
 
     # 目标检测相关
-    model_path = "/home/agent/Code/yolov3_my/output/20231031_144012/model/model-99.pth"
+    model_path = "/home/agent/Code/yolov3_my/output/20231118_105006/model/model-99.pth"
     device = "cuda:0"
     anchors = torch.tensor([[10, 13], [16, 30], [33, 23]])
     img_size = [160, 320]
@@ -172,7 +164,7 @@ if __name__ == '__main__':
     person_range = [-8, 0, -0.3, 1]  # 根据实际情况设定
 
     bev_map = BEV(height=6, width=8, n=256)
-
+    save_state = False
     out_path = "/home/agent/Code/ackermann_car_nav/data/trajectories"
     if len(sys.argv) > 1:
         env = sys.argv[1]
